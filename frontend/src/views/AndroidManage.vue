@@ -28,6 +28,9 @@
       <el-tab-pane v-if="auth.can('network_bridge')" label="虚拟网卡" name="network" lazy>
         <NetworkTab />
       </el-tab-pane>
+      <el-tab-pane v-if="auth.can('vpc_manage')" label="VPC 管理" name="vpc" lazy>
+        <VpcManageTab />
+      </el-tab-pane>
     </el-tabs>
 
     <!-- 创建容器弹窗 -->
@@ -104,6 +107,7 @@ import CreateContainer from '../components/android/CreateContainer.vue'
 import BackupSwitch from '../components/android/BackupSwitch.vue'
 import ImageManage from '../components/android/ImageManage.vue'
 import NetworkTab from '../components/android/NetworkTab.vue'
+import VpcManageTab from '../components/android/VpcManageTab.vue'
 import ContainerProjection from '../components/android/ContainerProjection.vue'
 import ContainerTerminal from '../components/android/ContainerTerminal.vue'
 import { reactive } from 'vue'

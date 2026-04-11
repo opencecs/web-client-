@@ -73,6 +73,66 @@ func (c *WSClient) handleSDKAction(req WSRequest) {
 	case "sdk:removeVpcRule":
 		c.sdkAction(req, "POST", "/mytVpc/delRule", req.Data, nil, 0)
 
+	// VPC 分组补充
+	case "sdk:renameVpcGroup":
+		c.sdkAction(req, "POST", "/mytVpc/group/alias", req.Data, nil, 0)
+	case "sdk:refreshVpcGroup":
+		c.sdkAction(req, "POST", "/mytVpc/group/update", req.Data, nil, 30*time.Second)
+	case "sdk:deleteVpcNode":
+		q := url.Values{}
+		q.Set("vpcID", fmt.Sprintf("%d", getNum(req.Data, "vpcID")))
+		c.sdkQuery(req, "DELETE", "/mytVpc", q)
+
+	// SOCKS5 + 延迟测试
+	case "sdk:addVpcSocks":
+		c.sdkAction(req, "POST", "/mytVpc/socks", req.Data, nil, 0)
+	case "sdk:testVpcNode":
+		q := url.Values{}
+		q.Set("address", getStr(req.Data, "address"))
+		c.sdkQuery(req, "GET", "/mytVpc/test", q)
+
+	// 批量规则
+	case "sdk:addVpcRuleBatch":
+		c.sdkAction(req, "POST", "/mytVpc/addRule/batch", req.Data, nil, 0)
+	case "sdk:removeVpcRuleBatch":
+		c.sdkAction(req, "POST", "/mytVpc/delRule/batch", req.Data, nil, 0)
+
+	// DNS 白名单
+	case "sdk:toggleWhiteListDns":
+		c.sdkAction(req, "POST", "/mytVpc/whiteListDns", req.Data, nil, 0)
+
+	// 域名直连（容器级）
+	case "sdk:getDomainDirect":
+		q := url.Values{}
+		q.Set("containerID", getStr(req.Data, "containerID"))
+		c.sdkQuery(req, "GET", "/mytVpc/domainDirect", q)
+	case "sdk:setDomainDirect":
+		c.sdkAction(req, "POST", "/mytVpc/domainDirect", req.Data, nil, 0)
+	case "sdk:deleteDomainDirect":
+		q := url.Values{}
+		q.Set("containerID", getStr(req.Data, "containerID"))
+		c.sdkQuery(req, "DELETE", "/mytVpc/domainDirect", q)
+
+	// 域名过滤（容器级）
+	case "sdk:getDomainFilter":
+		q := url.Values{}
+		q.Set("containerID", getStr(req.Data, "containerID"))
+		c.sdkQuery(req, "GET", "/mytVpc/domainFilter", q)
+	case "sdk:setDomainFilter":
+		c.sdkAction(req, "POST", "/mytVpc/domainFilter", req.Data, nil, 0)
+	case "sdk:deleteDomainFilter":
+		q := url.Values{}
+		q.Set("containerID", getStr(req.Data, "containerID"))
+		c.sdkQuery(req, "DELETE", "/mytVpc/domainFilter", q)
+
+	// 全局域名过滤
+	case "sdk:getGlobalDomainFilter":
+		c.sdkQuery(req, "GET", "/mytVpc/domainFilter/global", nil)
+	case "sdk:setGlobalDomainFilter":
+		c.sdkAction(req, "POST", "/mytVpc/domainFilter/global", req.Data, nil, 0)
+	case "sdk:deleteGlobalDomainFilter":
+		c.sdkQuery(req, "DELETE", "/mytVpc/domainFilter/global", nil)
+
 	// 备份管理
 	case "sdk:listBackups":
 		c.sdkQuery(req, "GET", "/backup", nil)

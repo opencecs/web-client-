@@ -106,9 +106,9 @@
     </el-card>
 
     <!-- SSH 终端弹窗 -->
-    <el-dialog v-model="sshDialogVisible" title="远程SSH" width="850px"
-      :close-on-click-modal="false" @close="cleanupSSH" destroy-on-close
-      style="--el-dialog-bg-color: #1e1e1e; --el-dialog-border-radius: 8px">
+    <el-dialog v-model="sshDialogVisible" title="远程SSH" width="90%"
+      :close-on-click-modal="false" @close="cleanupSSH" @opened="onSshDialogOpened" destroy-on-close
+      style="--el-dialog-bg-color: #1e1e1e; --el-dialog-border-radius: 8px; max-width: 1400px">
       <div v-if="!sshConnected" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px">
         <el-select v-model="sshAccount" style="width: 180px" placeholder="选择账号" @change="onSshAccountChange">
           <el-option label="user / myt" value="user:myt" />
@@ -122,7 +122,7 @@
       <div v-else style="margin-bottom: 8px">
         <el-tag type="success" size="small">已连接: {{ sshConnectedUser }}</el-tag>
       </div>
-      <div ref="sshTermRef" style="height: 450px; background: #0c0c0c; border-radius: 4px"></div>
+      <div ref="sshTermRef" style="height: 70vh; min-height: 400px; background: #0c0c0c; border-radius: 4px"></div>
     </el-dialog>
 
     <!-- 账号授权 -->
@@ -500,6 +500,16 @@ function handleLinkSSH() {
   sshDialogVisible.value = true
 }
 
+function onSshDialogOpened() {
+  if (sshFitAddon && sshTerm) {
+    sshFitAddon.fit()
+    const dims = sshFitAddon.proposeDimensions()
+    if (dims && sshSocket?.readyState === WebSocket.OPEN) {
+      sshSocket.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }))
+    }
+  }
+}
+
 function onSshAccountChange() {}
 
 async function connectSSH() {
@@ -516,7 +526,9 @@ async function connectSSH() {
   sshTerm = new Terminal({
     cursorBlink: true,
     fontSize: 14,
-    theme: { background: '#0c0c0c' }
+    theme: { background: '#0c0c0c' },
+    rightClickSelectsWord: true,
+    allowProposedApi: true
   })
   sshFitAddon = new FitAddon()
   sshTerm.loadAddon(sshFitAddon)
@@ -572,6 +584,37 @@ async function connectSSH() {
     if (sshSocket?.readyState === WebSocket.OPEN) {
       sshSocket.send(JSON.stringify({ type: 'stdin', data }))
     }
+  })
+
+  // Ctrl+Shift+V 粘贴
+  sshTerm.attachCustomKeyEventHandler((e) => {
+    if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && e.key === 'V') {
+      navigator.clipboard.readText().then(text => {
+        if (text && sshSocket?.readyState === WebSocket.OPEN) {
+          sshSocket.send(JSON.stringify({ type: 'stdin', data: text }))
+        }
+      }).catch(() => {})
+      return false
+    }
+    // Ctrl+Shift+C 复制选中内容
+    if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && e.key === 'C') {
+      const sel = sshTerm.getSelection()
+      if (sel) {
+        navigator.clipboard.writeText(sel).catch(() => {})
+      }
+      return false
+    }
+    return true
+  })
+
+  // 右键粘贴
+  sshTermRef.value?.addEventListener('contextmenu', (e) => {
+    e.preventDefault()
+    navigator.clipboard.readText().then(text => {
+      if (text && sshSocket?.readyState === WebSocket.OPEN) {
+        sshSocket.send(JSON.stringify({ type: 'stdin', data: text }))
+      }
+    }).catch(() => {})
   })
 
   window._sshResize = () => {

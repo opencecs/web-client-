@@ -57,7 +57,14 @@ func (c *WSClient) hasPermission(action string) bool {
 	case "sdk:listBridges", "sdk:createBridge", "sdk:updateBridge", "sdk:deleteBridge":
 		return p.NetworkBridge
 	case "sdk:listVpcGroups", "sdk:createVpcGroup", "sdk:deleteVpcGroup",
-		"sdk:listContainerRules", "sdk:addVpcRule", "sdk:removeVpcRule":
+		"sdk:renameVpcGroup", "sdk:refreshVpcGroup", "sdk:deleteVpcNode",
+		"sdk:addVpcSocks", "sdk:testVpcNode",
+		"sdk:listContainerRules", "sdk:addVpcRule", "sdk:removeVpcRule",
+		"sdk:addVpcRuleBatch", "sdk:removeVpcRuleBatch",
+		"sdk:toggleWhiteListDns",
+		"sdk:getDomainDirect", "sdk:setDomainDirect", "sdk:deleteDomainDirect",
+		"sdk:getDomainFilter", "sdk:setDomainFilter", "sdk:deleteDomainFilter",
+		"sdk:getGlobalDomainFilter", "sdk:setGlobalDomainFilter", "sdk:deleteGlobalDomainFilter":
 		return p.VpcManage
 
 	// 设备管理（仅 admin）
