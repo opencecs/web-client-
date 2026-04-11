@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, height=device-height, user-scalable=no, initial-scale=1, minimum-scale=1, maximum-scale=1">
+    <title>魔云腾</title>
+    <link rel="icon" href="/webplayer/favicon.ico" type="image/x-icon" />
+    
+    <!-- Wails V3 兼容性层 - 子窗口通过 BroadcastChannel 与主窗口通信 -->
+    <script type="module">
+        // 创建与主窗口通信的频道
+        const ipcChannel = new BroadcastChannel('wails-ipc-child');
+        
+        // 封装调用主窗口函数的方法
+        window.callMainWindow = async (funcName, args = {}) => {
+            return new Promise((resolve, reject) => {
+                const requestId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+                
+                ipcChannel.postMessage({
+                    type: 'ipc-request',
+                    funcName: funcName,
+                    args: args,
+                    requestId: requestId
+                });
+                
+                const timeout = setTimeout(() => {
+                    reject(new Error('IPC timeout'));
+                }, 10000);
+                
+                const handler = (event) => {
+                    if (event.data && event.data.type === 'ipc-response' && event.data.requestId === requestId) {
+                        clearTimeout(timeout);
+                        ipcChannel.removeEventListener('message', handler);
+                        if (event.data.error) {
+                            reject(new Error(event.data.error));
+                        } else {
+                            resolve(event.data.result);
+                        }
+                    }
+                };
+                
+                ipcChannel.addEventListener('message', handler);
+            });
+        };
+        
+        // 便捷函数：置顶窗口
+        window.ToggleProjectionWindowTop = async (windowID) => {
+            return window.callMainWindow('ToggleProjectionWindowTop', windowID);
+        };
+        
+        // 便捷函数：排列窗口
+        window.ArrangeProjectionWindows = async (params) => {
+            return window.callMainWindow('ArrangeProjectionWindows', params);
+        };
+        
+        console.log('[Wails V3] 子窗口通信层初始化完成');
+        
+        // 通知主窗口已就绪
+        setTimeout(() => {
+            console.log('[Wails V3] 子窗口已就绪');
+        }, 500);
+    </script>
+    
+    <style>
+		body{
+			background-color:#000;
+			margin: 0;
+			padding: 0;
+			height: 100vh;
+			overflow: hidden;
+		}
+		*{
+			padding: 0;
+			margin: 0;
+			box-sizing: border-box;
+		}
+		
+		/* 主容器布局 - 使用绝对定位 */
+		#assistDiv {
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100vw;
+			height: 100vh;
+			z-index: 50;
+		}
+		
+		/* 视频容器 - 全屏 */
+		#container {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100vw;
+			height: 100vh;
+			background-color: #000;
+			z-index: 10;
+			overflow: hidden;
+		}
+
+		/* 视频样式 - 旋转90度并交换宽高以铺满容器 */
+		video {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			width: 100vh;
+			height: 100vw;
+			object-fit: cover;
+			display: block;
+			z-index: 100;
+			opacity: 1;
+			transform: translate(-50%, -50%) rotate(90deg);
+		}
+
+		/* UI容器 */
+		#uicontainer {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100vw;
+			height: 100vh;
+			background: transparent !important;
+			z-index: 50;
+			pointer-events: none;
+		}
+
+	</style>
+</head>
+
+<body class="webpBack">
+<div id="root">
+	<script type="text/javascript" src="/webplayer/js/adapter-latest.js"></script>
+	<script type="text/javascript" src="/webplayer/js/jquery-3.2.1.min.js"></script>
+	<script type="text/javascript" src="/webplayer/js/h5.lgair.wt.all.min-2.3.js"></script>
+	<div id="assistDiv">
+		<!-- 视频区域 -->
+		<div id="container"></div>
+		<div id="uicontainer"></div>
+		
+	</div>
+</div>
+<div id="splash" class="splash"></div>
+<script>
+var wheelState = {
+    accumulatedDelta: 0,
+    accumulatedDistance: 0,
+    lastDirection: 0,
+    scrollCount: 0,
+    lastX: 0,
+    lastY: 0,
+    timer: null,
+    baseDistance: 60,
+    minDistance: 10
+};
+
+function getWheelDistance() {
+    var count = Math.min(wheelState.scrollCount, 5);
+    return count * 10;//Math.max(wheelState.baseDistance - count * 10, wheelState.minDistance);
+}
+
+function sendWheelScroll(direction, totalDistance, x, y) {
+    if (!window.h5_lgair || !window.h5_lgair.fun_send_data_multi || !window.h5_lgair.trans_xy) {
+        console.log('h5_lgair not ready');
+        return;
+    }
+    try {
+        var canvasEl = document.getElementById(window.h5_lgair.Canvas_id);
+        var rect = canvasEl.getBoundingClientRect();
+        var scrollDistance = direction * totalDistance;
+        var lg = window.h5_lgair;
+        var screenX = Math.round(x - rect.left);
+        var screenY = Math.round(y - rect.top);
+        var screenW = Math.round(rect.width);
+        var screenH = Math.round(rect.height);
+        var startPos = lg.trans_xy(x, y);
+        var endPos, startY, endY;
+        if (lg.be_Rotate) {
+            endX = startPos.x - scrollDistance;
+            endX = Math.max(0, Math.min(endX, lg.Canvas_width - 1));
+            endPos = {x: endX, y: startPos.y};
+        } else {
+            endY = startPos.y + scrollDistance;
+            endY = Math.max(0, Math.min(endY, lg.Canvas_height - 1));
+            endPos = {x: startPos.x, y: endY};
+        }
+        var startData = {
+            type: lg.SDL_EVENT_MSGTYPE_POINTSCLICK,
+            data: {
+                points: 1,
+                action: lg.ACTION_POINTER_DOWN,
+                nid: 0,
+                p: [{x: startPos.x, y: startPos.y, id: 0}],
+                sw: lg.Canvas_width,
+                sh: lg.Canvas_height
+            }
+        };
+        var stepCount = 6;
+        var stepDelay = 10;
+        var endCoord = lg.be_Rotate ? endPos.x : endPos.y;
+        var startCoord = lg.be_Rotate ? startPos.x : startPos.y;
+        var stepSize = (endCoord - startCoord) / stepCount;
+        lg.fun_send_data_multi(startData);
+        for (var i = 1; i <= stepCount; i++) {
+            (function(index) {
+                setTimeout(function() {
+                    var currentCoord = Math.round(startCoord + stepSize * index);
+                    lg.fun_send_data_multi({
+                        type: lg.SDL_EVENT_MSGTYPE_POINTSCLICK,
+                        data: {
+                            points: 1,
+                            action: lg.ACTION_MOVE,
+                            nid: 0,
+                            p: [{x: lg.be_Rotate ? currentCoord : startPos.x, y: lg.be_Rotate ? startPos.y : currentCoord, id: 0}],
+                            sw: lg.Canvas_width,
+                            sh: lg.Canvas_height
+                        }
+                    });
+                }, index * stepDelay);
+            })(i);
+        }
+        setTimeout(function() {
+            lg.fun_send_data_multi({
+                type: lg.SDL_EVENT_MSGTYPE_POINTSCLICK,
+                data: {
+                    points: 0,
+                    action: lg.ACTION_POINTER_UP,
+                    nid: 0,
+                    p: [{x: endPos.x, y: endPos.y, id: 0}],
+                    sw: lg.Canvas_width,
+                    sh: lg.Canvas_height
+                }
+            });
+        }, (stepCount + 1) * stepDelay);
+        console.log('Wheel scroll:', {
+            mouse: {x: x, y: y, screenX: screenX, screenY: screenY, screenW: screenW, screenH: screenH},
+            rotate: lg.be_Rotate,
+            lgCanvas: {w: lg.Canvas_width, h: lg.Canvas_height},
+            start: startPos,
+            end: endPos,
+            distance: scrollDistance
+        });
+    } catch(e) {
+        console.log('Wheel error:', e);
+    }
+ }
+
+document.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    window.h5_lgair && window.h5_lgair.sendCmdEvent && window.h5_lgair.sendCmdEvent("goBack");
+ });
+
+ function initWheelHandler() {
+    if (!window.h5_lgair || !window.h5_lgair.trans_xy) {
+        setTimeout(initWheelHandler, 100);
+        return;
+    }
+    wheelState.wheelHandler = function(e) {
+        e.preventDefault();
+        var now = Date.now();
+        var delta = e.deltaY > 0 ? 1 : -1;
+        wheelState.lastX = e.clientX;
+        wheelState.lastY = e.clientY;
+        if (wheelState.lastDirection !== delta) {
+            wheelState.accumulatedDelta = 0;
+            wheelState.accumulatedDistance = 0;
+            wheelState.scrollCount = 0;
+            wheelState.lastDirection = delta;
+        }
+        wheelState.accumulatedDelta += Math.abs(e.deltaY);
+        wheelState.scrollCount++;
+        var currentDistance = getWheelDistance();
+        wheelState.accumulatedDistance += currentDistance;
+        if (wheelState.timer) clearTimeout(wheelState.timer);
+        wheelState.timer = setTimeout(function() {
+            if (wheelState.accumulatedDelta > 0 && wheelState.lastDirection !== 0) {
+                sendWheelScroll(wheelState.lastDirection, wheelState.accumulatedDistance, wheelState.lastX, wheelState.lastY);
+                wheelState.accumulatedDelta = 0;
+                wheelState.accumulatedDistance = 0;
+                wheelState.scrollCount = 0;
+            }
+        }, 100);
+    };
+    wheelState.wheelListener = wheelState.wheelHandler;
+    document.addEventListener('wheel', wheelState.wheelListener, { passive: false });
+    console.log('Wheel handler initialized');
+ }
+
+ initWheelHandler();
+
+// 接收外壳 postMessage 指令（安卓按键）
+window.addEventListener('message', function(e) {
+    if (!e.data || !e.data.action) return;
+    var action = e.data.action;
+    if (window.h5_lgair && window.h5_lgair.sendCmdEvent) {
+        if (action === 'goBack') window.h5_lgair.sendCmdEvent('goBack');
+        else if (action === 'goHome') window.h5_lgair.sendCmdEvent('goHome');
+        else if (action === 'goClean') window.h5_lgair.sendCmdEvent('goClean');
+    }
+});
+
+// 页面清理处理器
+var cleanupHandlers = {
+    _registered: false,
+    
+    register: function() {
+        if (this._registered) return;
+        window.addEventListener('unload', this.unloadHandler);
+        window.addEventListener('beforeunload', this.beforeunloadHandler);
+        this._registered = true;
+    },
+    
+    unregister: function() {
+        if (!this._registered) return;
+        window.removeEventListener('unload', this.unloadHandler);
+        window.removeEventListener('beforeunload', this.beforeunloadHandler);
+        this._registered = false;
+    },
+    
+    unloadHandler: function() {
+        console.log('[BatchControl] 页面卸载，清理资源');
+        cleanupHandlers.cleanupAll();
+    },
+    
+    beforeunloadHandler: function() {
+        console.log('[BatchControl] 页面即将关闭，清理资源');
+        cleanupHandlers.cleanupAll();
+    },
+    
+    cleanupAll: function() {
+        if (typeof window.h5_lgair === 'object' && window.h5_lgair && typeof window.h5_lgair.destroy === 'function') {
+            window.h5_lgair.destroy();
+        }
+        if (typeof window.destroyWailsIPC === 'function') {
+            window.destroyWailsIPC();
+        }
+        if (typeof LGAIR_UI !== 'undefined' && typeof LGAIR_UI.stopAllTimers === 'function') {
+            LGAIR_UI.stopAllTimers();
+        } else if (typeof LGAIR_UI !== 'undefined' && typeof LGAIR_UI.stopProgress === 'function') {
+            LGAIR_UI.stopProgress();
+        }
+        if (typeof batchControlCheckTimer !== 'undefined' && batchControlCheckTimer) {
+            clearInterval(batchControlCheckTimer);
+            batchControlCheckTimer = null;
+        }
+        if (typeof BatchControl !== 'undefined' && BatchControl?.close) BatchControl.close();
+        if (typeof VideoStreamProxy !== 'undefined' && VideoStreamProxy?.close) VideoStreamProxy.close();
+        if (wheelState.timer) {
+            clearTimeout(wheelState.timer);
+            wheelState.timer = null;
+        }
+        if (wheelState.wheelListener) {
+            document.removeEventListener('wheel', wheelState.wheelListener);
+            wheelState.wheelListener = null;
+        }
+        if (window._h5LgairMessageHandler) {
+            window.removeEventListener('message', window._h5LgairMessageHandler);
+            window._h5LgairMessageHandler = null;
+        }
+        cleanupHandlers.unregister();
+    }
+};
+
+window.globalCleanup = function() {
+    cleanupHandlers.unloadHandler();
+};
+
+cleanupHandlers.register();
+
+</script>
+</body>
+</html>

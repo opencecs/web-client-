@@ -1,0 +1,28 @@
+#!/sbin/openrc-run
+# Alpine Linux (OpenRC) service for myt-panel
+
+name="myt-panel"
+description="MYT Cloud Phone Panel"
+
+command="/home/user/myt-panel"
+command_args="-port 8081"
+command_user="root"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+directory="/home/user"
+
+output_log="/home/user/logs/myt-panel.log"
+error_log="/home/user/logs/myt-panel.log"
+
+# auto restart on crash / update
+respawn_delay=3
+respawn_max=0
+
+depend() {
+    need net
+    after firewall
+}
+
+start_pre() {
+    mkdir -p /home/user/logs
+}

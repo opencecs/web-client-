@@ -1,0 +1,19 @@
+[Unit]
+Description=MYT Cloud Phone Panel
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/user
+ExecStart=/home/user/myt-panel -port 8081
+
+# auto restart on crash / update (exit 0 also restarts)
+Restart=always
+RestartSec=3
+
+# resource limits
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
