@@ -1,6 +1,7 @@
 {
   "name": "myt-panel-frontend",
   "private": true,
+  "type": "module",
   "version": "1.0.0",
   "scripts": {
     "dev": "vite",
@@ -19,6 +20,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",
+    "unplugin-auto-import": "^21.0.0",
+    "unplugin-vue-components": "^32.0.0",
     "vite": "^5.4.0"
   }
 }

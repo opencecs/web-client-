@@ -99,6 +99,12 @@ func (c *WSClient) hasPermission(action string) bool {
 	case "projection:token":
 		return p.Projection
 
+	// S5 代理 + 剪贴板 + 安卓控制（坑位权限在 handleProxyAction 中检查）
+	case "proxy:status", "proxy:set", "proxy:stop",
+		"clipboard:get", "clipboard:set",
+		"android:shake", "android:sms", "android:ping":
+		return p.ContainerStart
+
 	default:
 		return false
 	}

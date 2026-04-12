@@ -11,6 +11,7 @@
       <el-button v-if="auth.can('projection')" type="primary" size="small" :disabled="!hasRunning" @click="doProjection">投屏</el-button>
       <el-button v-if="auth.can('projection')" size="small" @click="$emit('close-all-projections')">关闭投屏</el-button>
       <el-button v-if="auth.can('terminal')" size="small" :disabled="!singleRunning" @click="$emit('terminal', singleContainer)">终端</el-button>
+      <el-button v-if="auth.can('container_start')" size="small" :disabled="!singleRunning" @click="$emit('s5proxy', singleContainer)">S5 代理</el-button>
       <el-button v-if="auth.can('backup_manage')" size="small" :disabled="!singleContainer" @click="$emit('backup-switch', liveSlots[0])">备份切换</el-button>
       <el-popconfirm v-if="auth.can('container_delete')" title="确认删除选中坑位的容器？" @confirm="batchAction('delete')">
         <template #reference>
@@ -35,7 +36,7 @@ const props = defineProps({
   selected: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['create', 'projection', 'terminal', 'backup-switch', 'rename', 'copy', 'close-all-projections'])
+const emit = defineEmits(['create', 'projection', 'terminal', 'backup-switch', 'rename', 'copy', 'close-all-projections', 's5proxy'])
 
 const auth = useAuthStore()
 const device = useDeviceStore()

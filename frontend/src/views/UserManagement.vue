@@ -115,10 +115,11 @@
           <el-checkbox v-model="permForm.container_create" label="创建容器" />
           <el-checkbox v-model="permForm.alias_manage" label="别名管理" />
           <el-checkbox v-model="permForm.backup_manage" label="备份管理" />
-          <el-checkbox v-model="permForm.image_view" label="查看镜像" />
+          <el-checkbox v-model="permForm.image_view" label="镜像管理" />
           <el-checkbox v-model="permForm.projection" label="投屏" />
           <el-checkbox v-model="permForm.terminal" label="终端" />
           <el-checkbox v-model="permForm.network_bridge" label="虚拟网卡" />
+          <el-checkbox v-model="permForm.vpc_manage" label="VPC 管理" />
         </div>
       </div>
 

@@ -604,6 +604,11 @@ func (c *WSClient) handleRequest(req WSRequest) {
 	// 投屏 token
 	case "projection:token":
 		c.handleProjectionToken(req)
+	// S5 代理管理 + 剪贴板 + 安卓控制
+	case "proxy:status", "proxy:set", "proxy:stop",
+		"clipboard:get", "clipboard:set",
+		"android:shake", "android:sms", "android:ping":
+		c.handleProxyAction(req)
 	// 系统设置
 	case "settings:get", "settings:set":
 		c.handleSettingsAction(req)
@@ -678,7 +683,7 @@ func (c *WSClient) handleProjectionToken(req WSRequest) {
 		return
 	}
 
-	// 构建响应（投屏 token 明文返回，本身是60秒短期token，无需加密）
+	// 构建响应（投屏 token 明文返回，绑定了用户+容器，连接时仍会校验账号状态）
 	respData := map[string]string{"token": token}
 	// 附带公网 UDP 端口配置（空则前端使用网页端口）
 	if udpPort := c.hub.auth.GetSetting("public_udp_port"); udpPort != "" {

@@ -1,0 +1,61 @@
+body {
+    background-color: #000;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
+}
+
+* {
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* 主容器布局 - 使用绝对定位 */
+#assistDiv {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 50;
+}
+
+/* 视频容器 - 全屏 */
+#container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    z-index: 10;
+    overflow: hidden;
+}
+
+/* 视频样式 - 旋转90度并交换宽高以铺满容器 */
+video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100vh;
+    height: 100vw;
+    object-fit: cover;
+    display: block;
+    z-index: 100;
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(90deg);
+}
+
+/* UI容器 */
+#uicontainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: transparent !important;
+    z-index: 50;
+    pointer-events: none;
+}

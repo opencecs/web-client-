@@ -83,6 +83,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.Compress(5, "text/html", "text/css", "text/javascript", "application/javascript", "application/json", "image/svg+xml"))
 	r.Use(corsMiddleware)
 
 	// 登录/登出（无需 JWT）
@@ -102,6 +103,11 @@ func main() {
 		// 仅保留 auth/me（前端路由守卫需要）
 		r.Get("/api/auth/me", authService.HandleMe)
 
+		// 容器文件上传代理（所有用户可用，内部检查坑位权限）
+		uploadProxy := &ContainerUploadProxy{auth: authService, hub: wsHub}
+		r.Post("/api/container/{name}/upload", uploadProxy.HandleUpload)
+		r.Post("/api/container/{name}/cert", uploadProxy.HandleCert)
+
 		// WebSocket（所有业务走这里）
 		r.Get("/ws", wsHub.HandleWS)
 
@@ -115,19 +121,21 @@ func main() {
 		})
 	})
 
-	// webplayer 静态文件
+	// webplayer 静态文件（长缓存）
 	wpFS, _ := fs.Sub(webplayerFS, "webplayer")
-	r.Handle("/webplayer/*", http.StripPrefix("/webplayer/", http.FileServer(http.FS(wpFS))))
+	r.Handle("/webplayer/*", http.StripPrefix("/webplayer/", staticCacheHandler(http.FileServer(http.FS(wpFS)), 86400*7)))
 
 	// 前端 SPA
 	distFS, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
 		log.Fatal("Failed to load frontend:", err)
 	}
-	fileServer := http.FileServer(http.FS(distFS))
+	fileServer := staticCacheHandler(http.FileServer(http.FS(distFS)), 86400*365)
 	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 		f, err := distFS.Open(r.URL.Path[1:])
 		if err != nil {
+			// SPA fallback: index.html 不缓存
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			indexFile, _ := distFS.Open("index.html")
 			if indexFile != nil {
 				defer indexFile.Close()
@@ -169,6 +177,15 @@ func corsMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+// staticCacheHandler 为静态资源添加 Cache-Control 头
+func staticCacheHandler(h http.Handler, maxAge int) http.Handler {
+	cacheVal := fmt.Sprintf("public, max-age=%d, immutable", maxAge)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", cacheVal)
+		h.ServeHTTP(w, r)
 	})
 }
 

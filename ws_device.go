@@ -46,7 +46,7 @@ func (c *WSClient) handleDeviceAction(req WSRequest) {
 		c.sendResponse(req.ID, true, "ok", json.RawMessage(raw))
 
 	case "device:reboot":
-		raw, err := c.hub.deviceRequestRaw("GET", "/server/reboot", nil)
+		raw, err := c.hub.deviceRequestRaw("POST", "/server/device/reboot", nil)
 		if err != nil {
 			c.sendResponse(req.ID, false, err.Error(), nil)
 			return

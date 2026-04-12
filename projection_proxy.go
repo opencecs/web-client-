@@ -361,6 +361,10 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 		http.Error(w, `{"error":"account disabled"}`, http.StatusForbidden)
 		return
 	}
+	if user.ExpiresAt != nil && user.ExpiresAt.Before(time.Now()) {
+		http.Error(w, `{"error":"account expired"}`, http.StatusForbidden)
+		return
+	}
 
 	indexNum := p.findContainerIndex(containerName)
 	if indexNum <= 0 {
@@ -404,6 +408,9 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 	}
 	defer frontConn.Close()
 
+	// 释放该坑位的预热连接（避免与容器信令冲突）
+	p.takeWarm(indexNum)
+
 	// 踢掉该坑位上已有的连接
 	p.evictExisting(indexNum)
 
@@ -421,6 +428,18 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 	}
 	defer closeDeviceConn(deviceConn)
 
+	// 设置浏览器端 pong 处理器：收到 pong 时重置读超时
+	const pongWait = 60 * time.Second
+	frontConn.SetReadDeadline(time.Now().Add(pongWait))
+	frontConn.SetPongHandler(func(string) error {
+		frontConn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	// 设置容器端读超时（容器的信令心跳间隔较短，给足够余量）
+	const deviceReadWait = 120 * time.Second
+	deviceConn.SetReadDeadline(time.Now().Add(deviceReadWait))
+
 	// 注册当前活跃会话
 	sess := &activeSession{
 		frontConn:  frontConn,
@@ -432,11 +451,30 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 	defer func() {
 		p.active.CompareAndDelete(indexNum, sess)
 		close(sess.done)
+		// 投屏断开后恢复预热连接
+		p.returnWarm(indexNum)
 	}()
 
 	log.Printf("[投屏代理] 用户 %s 连接坑位 %d (端口 %d, 容器 %s)", username, indexNum, targetPort, containerName)
 
 	var sessionUfrag string
+
+	// 浏览器端 ping 心跳（30秒一次）
+	pingDone := make(chan struct{})
+	go func() {
+		defer close(pingDone)
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				frontConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if err := frontConn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
+			}
+		}
+	}()
 
 	// 容器 → 浏览器
 	deviceDone := make(chan struct{})
@@ -447,6 +485,8 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 			if err != nil {
 				return
 			}
+			// 收到容器消息，重置容器端读超时
+			deviceConn.SetReadDeadline(time.Now().Add(deviceReadWait))
 			// 拦截 SDP offer 提取 ufrag，注册 UDP 会话
 			if msgType == websocket.TextMessage && p.registry != nil {
 				if ufrag := extractUfragFromOffer(data); ufrag != "" {
@@ -455,6 +495,7 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 					log.Printf("[投屏代理] 注册 UDP 会话: ufrag=%s → 端口 %d", ufrag, containerUDPPort)
 				}
 			}
+			frontConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := frontConn.WriteMessage(msgType, data); err != nil {
 				return
 			}
@@ -470,6 +511,7 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 			if err != nil {
 				return
 			}
+			deviceConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := deviceConn.WriteMessage(msgType, data); err != nil {
 				return
 			}
@@ -480,6 +522,7 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 	select {
 	case <-deviceDone:
 	case <-clientDone:
+	case <-pingDone:
 	}
 
 	// 清理 UDP 会话

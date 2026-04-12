@@ -12,6 +12,7 @@
           @backup-switch="openBackupSwitch"
           @rename="openAlias"
           @copy="openCopy"
+          @s5proxy="openS5Proxy"
         />
         <!-- 方块网格 -->
         <SlotGrid ref="slotGridRef" :max-slots="maxSlots" @selection-change="onSelectionChange" />
@@ -92,6 +93,64 @@
 
     <!-- 终端弹窗 -->
     <ContainerTerminal v-model="terminalVisible" :container="terminalContainer" />
+
+    <!-- S5 代理弹窗 -->
+    <el-dialog v-model="s5Visible" title="S5 代理管理" width="500px" @opened="fetchS5Status">
+      <div v-if="s5Container" style="margin-bottom: 12px">
+        <span style="color: #999">容器：</span>
+        <span style="color: #e0e0e0">{{ device.displayName(s5Container.name) }}</span>
+      </div>
+
+      <!-- 当前状态 -->
+      <div v-if="s5Status.status === 1" style="padding: 14px 16px; border-radius: 6px; margin-bottom: 16px; background: #162312; border: 1px solid #67c23a">
+        <div style="display: flex; align-items: center; justify-content: space-between">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <el-tag type="success" size="small" effect="dark">已启动</el-tag>
+            <span style="color: #e0e0e0; font-size: 13px; font-family: monospace">{{ s5Status.addr }}</span>
+          </div>
+          <el-button type="danger" size="small" :loading="s5Stopping" @click="doStopS5">停止代理</el-button>
+        </div>
+      </div>
+      <div v-else style="padding: 14px 16px; border-radius: 6px; margin-bottom: 16px; background: #1e1e1e; border: 1px dashed #555; text-align: center">
+        <el-tag type="info" size="small">未启动</el-tag>
+        <span style="color: #666; margin-left: 8px; font-size: 13px">当前未配置 S5 代理</span>
+      </div>
+
+      <!-- 设置表单 -->
+      <div style="color: #e0e0e0; font-weight: bold; margin-bottom: 10px">{{ s5Status.status === 1 ? '修改代理' : '设置代理' }}</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px">
+        <div>
+          <div style="color: #999; font-size: 12px; margin-bottom: 4px">服务器 IP</div>
+          <el-input v-model="s5Form.addr" placeholder="如 1.2.3.4" />
+        </div>
+        <div>
+          <div style="color: #999; font-size: 12px; margin-bottom: 4px">端口</div>
+          <el-input v-model="s5Form.port" placeholder="如 1080" />
+        </div>
+        <div>
+          <div style="color: #999; font-size: 12px; margin-bottom: 4px">用户名</div>
+          <el-input v-model="s5Form.usr" placeholder="无认证可留空" />
+        </div>
+        <div>
+          <div style="color: #999; font-size: 12px; margin-bottom: 4px">密码</div>
+          <el-input v-model="s5Form.pwd" placeholder="无认证可留空" type="password" show-password />
+        </div>
+      </div>
+      <div style="margin-bottom: 12px">
+        <div style="color: #999; font-size: 12px; margin-bottom: 4px">域名解析模式</div>
+        <el-radio-group v-model="s5Form.type">
+          <el-radio value="1">本地解析</el-radio>
+          <el-radio value="2">服务端解析</el-radio>
+        </el-radio-group>
+      </div>
+
+      <template #footer>
+        <el-button @click="s5Visible = false">关闭</el-button>
+        <el-button type="primary" :loading="s5Setting" @click="doSetS5">
+          {{ s5Status.status === 1 ? '更新代理' : '启动代理' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -259,5 +318,58 @@ const terminalContainer = ref(null)
 function openTerminal(container) {
   terminalContainer.value = container
   terminalVisible.value = true
+}
+
+// S5 代理
+const s5Visible = ref(false)
+const s5Container = ref(null)
+const s5Status = reactive({ status: 0, statusText: '未启动', addr: '', type: 0 })
+const s5Form = reactive({ addr: '', port: '', usr: '', pwd: '', type: '1' })
+const s5Setting = ref(false)
+const s5Stopping = ref(false)
+
+function openS5Proxy(container) {
+  if (!container) { ElMessage.warning('请选择一个运行中的容器'); return }
+  s5Container.value = container
+  s5Form.addr = ''; s5Form.port = ''; s5Form.usr = ''; s5Form.pwd = ''; s5Form.type = '1'
+  Object.assign(s5Status, { status: 0, statusText: '未启动', addr: '', type: 0 })
+  s5Visible.value = true
+}
+
+async function fetchS5Status() {
+  if (!s5Container.value) return
+  try {
+    const resp = await device.request('proxy:status', { name: s5Container.value.name })
+    const d = resp.data?.data || resp.data || {}
+    Object.assign(s5Status, { status: d.status || 0, statusText: d.statusText || '未启动', addr: d.addr || '', type: d.type || 0 })
+  } catch {}
+}
+
+async function doSetS5() {
+  if (!s5Form.addr || !s5Form.port) { ElMessage.warning('请填写 IP 和端口'); return }
+  s5Setting.value = true
+  try {
+    await device.request('proxy:set', {
+      name: s5Container.value.name,
+      addr: s5Form.addr,
+      port: s5Form.port,
+      usr: s5Form.usr,
+      pwd: s5Form.pwd,
+      type: s5Form.type
+    })
+    ElMessage.success('代理设置成功')
+    await fetchS5Status()
+  } catch (e) { ElMessage.error(e.message || '设置失败') }
+  finally { s5Setting.value = false }
+}
+
+async function doStopS5() {
+  s5Stopping.value = true
+  try {
+    await device.request('proxy:stop', { name: s5Container.value.name })
+    ElMessage.success('代理已停止')
+    await fetchS5Status()
+  } catch (e) { ElMessage.error(e.message || '停止失败') }
+  finally { s5Stopping.value = false }
 }
 </script>

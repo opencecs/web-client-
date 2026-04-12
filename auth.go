@@ -187,7 +187,8 @@ type ProjectionClaims struct {
 	jwt.RegisteredClaims
 }
 
-// generateProjectionToken 生成投屏专用短期 token（60秒有效）
+// generateProjectionToken 生成投屏专用 token（24小时有效）
+// 需要足够长的有效期，因为 SDK 断线重连会复用同一个 token
 func (s *AuthService) generateProjectionToken(userID int64, username, role, containerName string) (string, error) {
 	claims := &ProjectionClaims{
 		UserID:        userID,
@@ -196,7 +197,7 @@ func (s *AuthService) generateProjectionToken(userID int64, username, role, cont
 		Purpose:       "projection",
 		ContainerName: containerName,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(60 * time.Second)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
