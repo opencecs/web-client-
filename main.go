@@ -84,6 +84,9 @@ func main() {
 	// 用户过期检查
 	go authService.CheckExpiry(wsHub, 30*time.Second)
 
+	// 自动更新（仅正式版）
+	go StartAutoUpdate(wsHub)
+
 	// 路由
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)

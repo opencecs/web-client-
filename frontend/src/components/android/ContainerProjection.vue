@@ -12,7 +12,7 @@
     <div class="projection-main">
       <div class="projection-body">
         <iframe v-if="playerUrl" ref="iframeRef" :src="playerUrl" class="projection-iframe"
-          allowfullscreen allow="autoplay; fullscreen" disablepictureinpicture />
+          allowfullscreen allow="autoplay *; fullscreen; microphone; camera; display-capture" disablepictureinpicture />
       </div>
       <!-- 右侧工具栏 -->
       <div class="projection-sidebar" @mousedown.stop>

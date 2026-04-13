@@ -120,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Refresh } from '@element-plus/icons-vue'
 import { useDeviceStore } from '../../stores/device.js'
@@ -338,8 +338,10 @@ async function doBatchChangeImage() {
 }
 
 onMounted(() => {
-  fetchMirrorMap()
+  if (device.online) fetchMirrorMap()
 })
+// 刷新页面后 WS 重连时重新获取镜像名称映射
+watch(() => device.online, (v) => { if (v && !Object.keys(mirrorMap.value).length) fetchMirrorMap() })
 
 defineExpose({
   fetchList: () => device.refreshContainers()

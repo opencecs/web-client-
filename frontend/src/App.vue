@@ -26,11 +26,15 @@
       </el-container>
     </el-container>
     <router-view v-else />
+    <!-- 手机 UA 被强制桌面模式时，显示回切按钮 -->
+    <div v-if="showMobileSwitch" class="mobile-switch-hint" @click="switchToMobile">
+      切换到手机版
+    </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth.js'
 import { useDeviceStore } from './stores/device.js'
@@ -54,6 +58,15 @@ function handleCommand(cmd) {
     router.push('/login')
   }
 }
+
+// 检测：手机 UA 但被 force_platform=desktop 强制到桌面版
+const isMobileUA = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile/i.test(navigator.userAgent)
+const showMobileSwitch = computed(() => isMobileUA && localStorage.getItem('force_platform') === 'desktop')
+
+function switchToMobile() {
+  localStorage.removeItem('force_platform')
+  window.location.href = '/m'
+}
 </script>
 
 <style>
@@ -68,5 +81,21 @@ html.dark {
 }
 .app-container {
   height: 100vh;
+}
+.mobile-switch-hint {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #409eff;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 24px;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.4);
+  z-index: 99999;
+}
+.mobile-switch-hint:active {
+  transform: scale(0.95);
 }
 </style>

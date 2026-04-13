@@ -293,16 +293,28 @@ cleanupHandlers.register();
 // 浏览器后台切回来时，检测 WebRTC 连接是否断开，断了直接 reload 重连
 (function() {
     var reloadTimer = null;
+    var pageLoadTime = Date.now();
+    // 启动保护期：前 10 秒内不做重连检测（等 SDK 和 WebRTC 初始化完成）
+    var INIT_GUARD_MS = 10000;
+
     document.addEventListener('visibilitychange', function() {
         if (document.visibilityState !== 'visible') return;
+        if (window._evicted) return; // 被踢下线，不重连
+        if (Date.now() - pageLoadTime < INIT_GUARD_MS) return; // 启动保护期内忽略
         // 延迟 1.5 秒再检测，给 SDK 自带重连一个机会
         if (reloadTimer) clearTimeout(reloadTimer);
         reloadTimer = setTimeout(function() {
+            if (window._evicted) return; // 二次检查
             var pc = null;
             if (window.h5_lgair) {
                 pc = (window.h5_lgair.g_player && window.h5_lgair.g_player.pconnection) || window.h5_lgair.pconnection;
             }
-            if (!pc) { location.reload(); return; }
+            // pc 不存在但还在初始化期内，不 reload
+            if (!pc) {
+                if (Date.now() - pageLoadTime < INIT_GUARD_MS + 5000) return;
+                location.reload();
+                return;
+            }
             var state = pc.connectionState || pc.iceConnectionState;
             if (state === 'disconnected' || state === 'failed' || state === 'closed') {
                 console.log('[投屏] 后台返回检测到连接断开 (' + state + ')，重新加载');

@@ -61,7 +61,7 @@ func (c *WSClient) handlePanelCheckUpdate(req WSRequest) {
 	})
 }
 
-// handlePanelDoUpdate 执行面板更新
+// handlePanelDoUpdate 执行面板更新（手动触发）
 func (c *WSClient) handlePanelDoUpdate(req WSRequest) {
 	updateMu.Lock()
 	if updating {
@@ -72,42 +72,48 @@ func (c *WSClient) handlePanelDoUpdate(req WSRequest) {
 	updating = true
 	updateMu.Unlock()
 
-	defer func() {
+	c.sendResponse(req.ID, true, "updating", nil)
+
+	err := doUpdateInternal(c.hub)
+	if err != nil {
 		updateMu.Lock()
 		updating = false
 		updateMu.Unlock()
-	}()
+		c.hub.Broadcast("task:progress", map[string]interface{}{
+			"action": "panel:update", "phase": "error", "message": err.Error(),
+		})
+	}
+	// 成功时 doUpdateInternal 会重启进程，不会走到这里
+}
 
+// doUpdateInternal 核心更新逻辑（检查→下载→校验→替换→重启）
+// 供手动更新和自动更新共用，通过 hub.Broadcast 发送进度
+func doUpdateInternal(hub *WSHub) error {
 	// 1. 检查更新
-	c.hub.Broadcast("task:progress", map[string]interface{}{
+	hub.Broadcast("task:progress", map[string]interface{}{
 		"action": "panel:update", "phase": "checking", "message": "正在检查更新...",
 	})
 
 	info, err := checkPanelUpdate()
 	if err != nil {
-		c.sendResponse(req.ID, false, "检查更新失败: "+err.Error(), nil)
-		return
+		return fmt.Errorf("检查更新失败: %v", err)
 	}
 
 	if info.DownloadURL == "" || compareVersion(info.LatestVersion, Version) <= 0 {
-		c.sendResponse(req.ID, false, "已是最新版本", nil)
-		return
+		return fmt.Errorf("已是最新版本")
 	}
 
-	c.sendResponse(req.ID, true, "updating", nil)
+	log.Printf("[更新] 发现新版本: %s → %s", Version, info.LatestVersion)
 
 	// 2. 下载新二进制
-	c.hub.Broadcast("task:progress", map[string]interface{}{
+	hub.Broadcast("task:progress", map[string]interface{}{
 		"action": "panel:update", "phase": "downloading", "message": "正在下载新版本...",
 		"progress": 0, "fileSize": info.FileSize,
 	})
 
 	exePath, err := os.Executable()
 	if err != nil {
-		c.hub.Broadcast("task:progress", map[string]interface{}{
-			"action": "panel:update", "phase": "error", "message": "获取程序路径失败",
-		})
-		return
+		return fmt.Errorf("获取程序路径失败: %v", err)
 	}
 	exePath, _ = filepath.EvalSymlinks(exePath)
 	newPath := exePath + ".new"
@@ -117,21 +123,18 @@ func (c *WSClient) handlePanelDoUpdate(req WSRequest) {
 		if total > 0 {
 			progress = int(downloaded * 100 / total)
 		}
-		c.hub.Broadcast("task:progress", map[string]interface{}{
+		hub.Broadcast("task:progress", map[string]interface{}{
 			"action": "panel:update", "phase": "downloading",
 			"progress": progress, "downloaded": downloaded, "fileSize": total,
 		})
 	})
 	if err != nil {
 		os.Remove(newPath)
-		c.hub.Broadcast("task:progress", map[string]interface{}{
-			"action": "panel:update", "phase": "error", "message": "下载失败: " + err.Error(),
-		})
-		return
+		return fmt.Errorf("下载失败: %v", err)
 	}
 
 	// 3. SHA256 校验
-	c.hub.Broadcast("task:progress", map[string]interface{}{
+	hub.Broadcast("task:progress", map[string]interface{}{
 		"action": "panel:update", "phase": "verifying", "message": "正在校验文件...", "progress": 100,
 	})
 
@@ -139,78 +142,104 @@ func (c *WSClient) handlePanelDoUpdate(req WSRequest) {
 		actualHash, err := fileSHA256(newPath)
 		if err != nil {
 			os.Remove(newPath)
-			c.hub.Broadcast("task:progress", map[string]interface{}{
-				"action": "panel:update", "phase": "error", "message": "校验失败: " + err.Error(),
-			})
-			return
+			return fmt.Errorf("校验失败: %v", err)
 		}
 		if !strings.EqualFold(actualHash, info.SHA256) {
 			os.Remove(newPath)
-			c.hub.Broadcast("task:progress", map[string]interface{}{
-				"action": "panel:update", "phase": "error",
-				"message": fmt.Sprintf("校验不匹配: 期望 %s, 实际 %s", info.SHA256[:16]+"...", actualHash[:16]+"..."),
-			})
-			return
+			return fmt.Errorf("校验不匹配: 期望 %s, 实际 %s", info.SHA256[:16]+"...", actualHash[:16]+"...")
 		}
 		log.Printf("[更新] SHA256 校验通过: %s", actualHash[:16])
 	}
 
 	// 4. 原子替换
-	c.hub.Broadcast("task:progress", map[string]interface{}{
+	hub.Broadcast("task:progress", map[string]interface{}{
 		"action": "panel:update", "phase": "replacing", "message": "正在替换文件...", "progress": 100,
 	})
 
-	// 设置可执行权限
 	os.Chmod(newPath, 0755)
 
-	// 备份旧文件
 	backupPath := exePath + ".bak"
 	os.Remove(backupPath)
 	if err := os.Rename(exePath, backupPath); err != nil {
 		os.Remove(newPath)
-		c.hub.Broadcast("task:progress", map[string]interface{}{
-			"action": "panel:update", "phase": "error", "message": "备份旧文件失败: " + err.Error(),
-		})
-		return
+		return fmt.Errorf("备份旧文件失败: %v", err)
 	}
 
-	// 替换新文件
 	if err := os.Rename(newPath, exePath); err != nil {
-		// 回滚
 		os.Rename(backupPath, exePath)
-		c.hub.Broadcast("task:progress", map[string]interface{}{
-			"action": "panel:update", "phase": "error", "message": "替换文件失败: " + err.Error(),
-		})
-		return
+		return fmt.Errorf("替换文件失败: %v", err)
 	}
 
-	// 更新 .sha256 文件
 	if info.SHA256 != "" {
 		os.WriteFile(exePath+".sha256", []byte(info.SHA256), 0644)
 	}
 
 	log.Printf("[更新] 面板已更新: %s → %s", Version, info.LatestVersion)
 
-	// 5. 通知客户端即将重启
-	c.hub.Broadcast("task:progress", map[string]interface{}{
+	// 5. 通知并重启
+	hub.Broadcast("task:progress", map[string]interface{}{
 		"action": "panel:update", "phase": "restarting",
 		"message": fmt.Sprintf("更新完成 v%s → v%s，正在重启...", Version, info.LatestVersion),
 		"progress": 100, "done": true,
 	})
 
-	// 延迟重启，让消息先发出去
 	go func() {
 		time.Sleep(2 * time.Second)
 		log.Printf("[更新] 正在重启...")
-
-		// syscall.Exec 替换当前进程
 		args := os.Args
 		env := os.Environ()
 		if err := syscall.Exec(exePath, args, env); err != nil {
 			log.Printf("[更新] syscall.Exec 失败: %v，尝试 os.Exit", err)
-			os.Exit(0) // 依赖外部进程管理器重启
+			os.Exit(0)
 		}
 	}()
+
+	return nil
+}
+
+// StartAutoUpdate 后台自动更新（仅正式版，每 5 分钟检查）
+func StartAutoUpdate(hub *WSHub) {
+	if Version == "dev" {
+		log.Printf("[自动更新] 当前为开发版本，跳过自动更新")
+		return
+	}
+
+	log.Printf("[自动更新] 已启动，当前版本 v%s，每 5 分钟检查", Version)
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		info, err := checkPanelUpdate()
+		if err != nil {
+			log.Printf("[自动更新] 检查失败: %v", err)
+			continue
+		}
+
+		if info.DownloadURL == "" || compareVersion(info.LatestVersion, Version) <= 0 {
+			continue
+		}
+
+		log.Printf("[自动更新] 发现新版本 v%s → v%s，开始自动更新", Version, info.LatestVersion)
+
+		updateMu.Lock()
+		if updating {
+			updateMu.Unlock()
+			log.Printf("[自动更新] 已有更新在进行中，跳过")
+			continue
+		}
+		updating = true
+		updateMu.Unlock()
+
+		err = doUpdateInternal(hub)
+		if err != nil {
+			updateMu.Lock()
+			updating = false
+			updateMu.Unlock()
+			log.Printf("[自动更新] 更新失败: %v", err)
+		}
+		// 成功时进程会重启，不会走到这里
+	}
 }
 
 // checkPanelUpdate 向更新服务器查询最新版本

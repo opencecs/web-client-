@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import { useAuthStore } from './auth.js'
 
 // AES-GCM 解密（配合后端 aesEncrypt）

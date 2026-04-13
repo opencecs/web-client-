@@ -1,0 +1,131 @@
+/* Vant 暗色主题 — 匹配现有深色调色板 */
+:root {
+  /* 基础色 */
+  --van-background: #0a0a0a;
+  --van-background-2: #1a1a1a;
+  --van-background-3: #141414;
+
+  /* 文本色 */
+  --van-text-color: #e0e0e0;
+  --van-text-color-2: #999;
+  --van-text-color-3: #666;
+
+  /* 主题色 */
+  --van-primary-color: #409eff;
+  --van-success-color: #67c23a;
+  --van-warning-color: #e6a23c;
+  --van-danger-color: #f56c6c;
+
+  /* 边框 */
+  --van-border-color: #2a2a2a;
+
+  /* 组件定制 */
+  --van-nav-bar-background: #141414;
+  --van-nav-bar-title-text-color: #e0e0e0;
+  --van-nav-bar-icon-color: #bbb;
+
+  --van-tabbar-background: #141414;
+  --van-tabbar-item-text-color: #666;
+  --van-tabbar-item-active-color: #409eff;
+
+  --van-cell-background: #1a1a1a;
+  --van-cell-text-color: #e0e0e0;
+  --van-cell-label-color: #999;
+  --van-cell-border-color: #2a2a2a;
+
+  --van-card-background: #1a1a1a;
+  --van-card-text-color: #e0e0e0;
+
+  --van-button-primary-background: #409eff;
+  --van-button-primary-border-color: #409eff;
+
+  --van-field-input-text-color: #e0e0e0;
+  --van-field-placeholder-text-color: #666;
+  --van-field-label-color: #bbb;
+
+  --van-tag-primary-color: #409eff;
+  --van-tag-success-color: #67c23a;
+  --van-tag-warning-color: #e6a23c;
+  --van-tag-danger-color: #f56c6c;
+
+  --van-dialog-background: #1a1a1a;
+  --van-dialog-header-font-weight: bold;
+
+  --van-popup-background: #1a1a1a;
+
+  --van-action-sheet-item-background: #1a1a1a;
+  --van-action-sheet-subname-color: #999;
+
+  --van-pull-refresh-head-text-color: #999;
+
+  --van-switch-on-background: #409eff;
+
+  --van-toast-background: rgba(30, 30, 30, 0.88);
+
+  --van-steps-active-color: #409eff;
+
+  --van-grid-item-text-color: #bbb;
+
+  --van-empty-description-color: #666;
+
+  --van-cell-group-inset-border-radius: 12px;
+
+  --van-divider-border-color: #2a2a2a;
+  --van-divider-text-color: #666;
+
+  --van-collapse-item-content-background: #1a1a1a;
+
+  --van-search-background: #141414;
+  --van-search-content-background: #1a1a1a;
+  --van-search-input-text-color: #e0e0e0;
+
+  --van-tab-active-text-color: #409eff;
+  --van-tabs-bottom-bar-color: #409eff;
+  --van-tabs-nav-background: #141414;
+}
+
+/* 全局移动端样式 */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #0a0a0a;
+  color: #e0e0e0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  /* 防止 iOS 橡皮筋效果 */
+  overscroll-behavior: none;
+}
+
+/* 安全区域适配（刘海屏/底部横条） */
+.mobile-app {
+  padding-bottom: constant(safe-area-inset-bottom); /* iOS < 11.2 */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* TabBar 安全区域 */
+.van-tabbar {
+  padding-bottom: constant(safe-area-inset-bottom) !important;
+  padding-bottom: env(safe-area-inset-bottom) !important;
+}
+
+/* 卡片统一样式 */
+.mobile-card {
+  background: #1a1a1a;
+  border-radius: 12px;
+  border: 1px solid #2a2a2a;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+/* 状态指示点 */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.status-dot.running { background: #67c23a; }
+.status-dot.stopped { background: #999; }
+.status-dot.error { background: #f56c6c; }

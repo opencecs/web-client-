@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
+import { isMobile } from '../utils/isMobile.js'
+import { mobileRoutes } from './mobileRoutes.js'
 import api from '../api/index.js'
 
 const routes = [
@@ -9,6 +11,9 @@ const routes = [
   { path: '/android', name: 'AndroidManage', component: () => import('../views/AndroidManage.vue') },
 
   { path: '/users', name: 'UserManagement', component: () => import('../views/UserManagement.vue'), meta: { admin: true } },
+
+  // 移动端路由
+  ...mobileRoutes,
 ]
 
 const router = createRouter({
@@ -18,25 +23,54 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   const auth = useAuthStore()
+
+  // 移动端自动重定向：桌面路由 → /m/ 路由
+  if (isMobile && !to.path.startsWith('/m')) {
+    const mobileMap = {
+      '/': '/m',
+      '/login': '/m/login',
+      '/android': '/m/android',
+      '/device': '/m/device',
+      '/users': '/m/users',
+    }
+    const target = mobileMap[to.path]
+    if (target) { next(target); return }
+  }
+  // 桌面端自动重定向：/m/ 路由 → 桌面路由
+  if (!isMobile && to.path.startsWith('/m')) {
+    const desktopMap = {
+      '/m': '/',
+      '/m/login': '/login',
+      '/m/android': '/android',
+      '/m/device': '/device',
+      '/m/users': '/users',
+    }
+    const target = desktopMap[to.path]
+    if (target) { next(target); return }
+  }
+
+  // 移动端登录页路径
+  const loginPath = isMobile ? '/m/login' : '/login'
+  const homePath = isMobile ? '/m' : '/'
+
   if (to.meta.guest) {
-    // 已登录用户访问登录页，重定向到首页
     if (auth.token) {
-      next('/')
+      next(homePath)
     } else {
       next()
     }
   } else if (!auth.token) {
-    next('/login')
+    next(loginPath)
   } else if (to.meta.admin) {
     // 每次进入管理员页面都从后端验证角色
     try {
       const { data } = await api.get('/auth/me')
       if (data.role !== 'admin') {
-        next('/')
+        next(homePath)
         return
       }
     } catch {
-      next('/login')
+      next(loginPath)
       return
     }
     next()

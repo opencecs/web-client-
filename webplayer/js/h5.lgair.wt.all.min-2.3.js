@@ -136,11 +136,20 @@ var MCtrlConn = function(a) {
                         if (msg.id === 'evicted') {
                             window.h5_lgair._isRestarting = true;
                             window.h5_lgair._evicted = true;
+                            window._evicted = true;
                             window.h5_lgair.fun_log("投屏已被其他窗口接管，停止重连", window.h5_lgair.LOG_ERROR);
+                            // 清除所有重连定时器
+                            if (window.h5_lgair._webrtcRestartTimer) {
+                                clearInterval(window.h5_lgair._webrtcRestartTimer);
+                                window.h5_lgair._webrtcRestartTimer = null;
+                            }
+                            if (typeof LGAIR_UI !== 'undefined') {
+                                LGAIR_UI.stopAllTimers && LGAIR_UI.stopAllTimers();
+                            }
                             // 在页面上显示提示
                             var tip = document.createElement('div');
                             tip.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999999;background:rgba(0,0,0,0.85);color:#fff;padding:20px 32px;border-radius:12px;font-size:16px;text-align:center;';
-                            tip.textContent = '投屏已被其他窗口接管';
+                            tip.textContent = msg.data || '投屏已被其他窗口接管';
                             document.body.appendChild(tip);
                             return;
                         }
@@ -150,6 +159,7 @@ var MCtrlConn = function(a) {
             }.bind(this);
             this.ws.onerror = function(a) {
                 this.log("onError() error: " + a);
+                if (window.h5_lgair._evicted) return;
                 window.h5_lgair.fun_log("websocket error 系统繁忙，自动重连...", window.h5_lgair.LOG_ERROR);
                 if (window.h5_lgair._isRestarting) return;
                 window.h5_lgair._autoReconnectCount = (window.h5_lgair._autoReconnectCount || 0) + 1;
@@ -411,9 +421,9 @@ var MCtrlConn = function(a) {
         }.bind(this)
     },
     LGAIR_UI = {
-        logo_url: "public/images/loading.png",
-        icon_url: "public/images/108.png",
-        ad_url: "public/images/loading.png",
+        logo_url: "public/images/loading.png?v=2",
+        icon_url: "public/images/108.png?v=2",
+        ad_url: "public/images/loading.png?v=2",
         ad_goto_url: "#",
         logo_showTime: 1,
         logo_startTime: 0,
@@ -1040,6 +1050,11 @@ LGAIR.prototype.start = function(a) {
     }
 };
 LGAIR.prototype._restartWebRTC = function() {
+    // 被其他窗口接管，禁止一切重连
+    if (this._evicted) {
+        this._isRestarting = !0;
+        return;
+    }
     try {
         LGAIR_UI && LGAIR_UI._leakLog && LGAIR_UI._leakLog("webrtc restart begin");
         this._isRestarting = !0;

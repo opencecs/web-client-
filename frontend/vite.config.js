@@ -3,16 +3,17 @@ import vue from '@vitejs/plugin-vue'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import { VantResolver } from '@vant/auto-import-resolver'
 
 export default defineConfig({
   plugins: [
     vue(),
-    // Element Plus 按需自动导入（组件 + API）
+    // Element Plus + Vant 按需自动导入
     AutoImport({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [ElementPlusResolver(), VantResolver()],
     }),
     Components({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [ElementPlusResolver(), VantResolver()],
     }),
   ],
   server: {
@@ -31,6 +32,7 @@ export default defineConfig({
         manualChunks: {
           'vue-vendor': ['vue', 'vue-router', 'pinia'],
           'element-plus': ['element-plus'],
+          'vant': ['vant'],
           'xterm': ['xterm', '@xterm/addon-fit'],
         }
       }

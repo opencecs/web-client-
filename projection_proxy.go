@@ -421,6 +421,9 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 	// 踢掉该坑位上已有的连接
 	p.evictExisting(indexNum)
 
+	// 等容器清理信令会话（预热连接可能刚被 handleProjectionToken 异步释放）
+	time.Sleep(300 * time.Millisecond)
+
 	// 连接容器（大缓冲低延迟，服务端重试一次）
 	projDialer := websocket.Dialer{
 		ReadBufferSize:  32 * 1024,
