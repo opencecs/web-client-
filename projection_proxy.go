@@ -269,7 +269,9 @@ func (p *ProjectionProxy) warmConnect(indexNum int, retryCount int) {
 			}
 		}()
 
-		// 读取协程（消费容器消息，保持 WebSocket 活跃，不回复 SDP 避免容器锁定会话）
+		// 读取协程（消费容器消息，保持 WebSocket 活跃）
+		// 增加初始健康检测：10 秒内必须收到至少一条消息，否则说明安卓未就绪
+		firstMsg := make(chan struct{}, 1)
 		readDone := make(chan struct{})
 		go func() {
 			defer close(readDone)
@@ -278,16 +280,43 @@ func (p *ProjectionProxy) warmConnect(indexNum int, retryCount int) {
 				if err != nil {
 					return
 				}
+				select {
+				case firstMsg <- struct{}{}:
+				default:
+				}
 			}
 		}()
 
+		// 等待初始健康检测通过（10秒内收到任意消息）
+		select {
+		case <-ctx.Done():
+			return
+		case <-firstMsg:
+			// 信令正常，继续保持连接
+			log.Printf("[投屏预热] 坑位 %d 信令健康检测通过", indexNum)
+		case <-time.After(10 * time.Second):
+			// 安卓未就绪或信令卡死，关闭后延迟重试
+			log.Printf("[投屏预热] 坑位 %d 未收到消息（安卓未就绪），断开重试", indexNum)
+			// defer 会关闭连接，下面触发延迟重连
+			p.warming.Store(indexNum, true)
+			go func() {
+				time.Sleep(30 * time.Second)
+				p.warming.Delete(indexNum)
+				p.warmConnect(indexNum, 0)
+			}()
+			return
+		case <-heartDone:
+		case <-readDone:
+		}
+
+		// 持久保持连接，等待任一方退出
 		select {
 		case <-ctx.Done():
 		case <-heartDone:
 		case <-readDone:
 		}
 
-		// 容器端主动断开 → 30 秒后重连
+		// 异常断开 → 延迟重连
 		select {
 		case <-ctx.Done():
 			// 被主动取消（takeWarm / syncWarmPool），不自动重连
@@ -297,7 +326,7 @@ func (p *ProjectionProxy) warmConnect(indexNum int, retryCount int) {
 			go func() {
 				time.Sleep(5 * time.Second)
 				p.warming.Delete(indexNum)
-				p.warmConnect(indexNum, 0) // 断开后重连重置计数
+				p.warmConnect(indexNum, 0)
 			}()
 		}
 	}()
@@ -475,6 +504,16 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 	var deviceWriteMu sync.Mutex // 保护 deviceConn 并发写入
 	var frontWriteMu sync.Mutex  // 保护 frontConn 并发写入
 
+	// 信令超时检测：10 秒内必须收到 SDP offer（注册 UDP 会话），
+	// 否则说明安卓未就绪或信令卡死，强制断开让浏览器重连
+	signalingTimer := time.AfterFunc(10*time.Second, func() {
+		if sessionUfrag == "" {
+			log.Printf("[投屏代理] 坑位 %d 信令超时（未收到 SDP offer），强制断开", indexNum)
+			closeDeviceConn(deviceConn)
+			frontConn.Close()
+		}
+	})
+
 	// 浏览器端 ping 心跳（30秒一次）
 	pingDone := make(chan struct{})
 	go func() {
@@ -534,6 +573,7 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 			if msgType == websocket.TextMessage && p.registry != nil {
 				if ufrag := extractUfragFromOffer(data); ufrag != "" {
 					sessionUfrag = ufrag
+					signalingTimer.Stop() // 收到 offer，取消信令超时
 					p.registry.Register(ufrag, containerUDPPort, GetMuxConn())
 					log.Printf("[投屏代理] 注册 UDP 会话: ufrag=%s → 端口 %d", ufrag, containerUDPPort)
 				}
@@ -574,6 +614,9 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 	case <-pingDone:
 	case <-deviceHeartDone:
 	}
+
+	// 停止信令超时检测
+	signalingTimer.Stop()
 
 	// 清理 UDP 会话
 	if p.registry != nil && sessionUfrag != "" {

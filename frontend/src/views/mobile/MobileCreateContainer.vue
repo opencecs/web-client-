@@ -169,6 +169,7 @@ const enforceEnabled = ref(true)
 const creating = ref(false)
 const showImagePicker = ref(false)
 const mirrors = ref([])
+const phoneModels = ref([])
 
 const form = reactive({
   alias: '', imageUrl: '', dns: '223.5.5.5', sandboxSize: '32GB',
@@ -228,6 +229,33 @@ function generateName() {
   return name
 }
 
+function buildBody(slotNum) {
+  const body = { ...form }
+  delete body.alias
+  body.name = generateName()
+  body.indexNum = slotNum
+  body.mgenable = mgEnabled.value ? '1' : '0'
+  body.gmsenable = gmsEnabled.value ? '1' : '0'
+  body.enforce = enforceEnabled.value
+  if (body.s5Type === '0') {
+    delete body.s5Type; delete body.s5IP; delete body.s5Port
+    delete body.s5User; delete body.s5Password
+  }
+  if (!body.PINCode) delete body.PINCode
+  // 随机分配机型
+  const androidVer = androidVersion.value === 'and14' ? '14' : '16'
+  const candidates = phoneModels.value.filter(m => m.android_version === androidVer)
+  const pool = candidates.length ? candidates : phoneModels.value
+  if (pool.length) {
+    const rand = pool[Math.floor(Math.random() * pool.length)]
+    body.modelId = rand.id || rand.modelId || ''
+    body.modelName = rand.name || rand.modelName || ''
+  }
+  if (!body.modelId) { delete body.modelId; delete body.modelName }
+  if (!body.sandboxSize) delete body.sandboxSize
+  return body
+}
+
 async function doCreate() {
   creating.value = true
   try {
@@ -245,32 +273,49 @@ async function doCreate() {
     taskPhase.value = 'creating'
     const slots = [...selectedSlots.value].sort((a, b) => a - b)
     const alias = form.alias?.trim()
-    let success = 0
+    let success = 0, lastErr = '', failedSlots = []
     for (let i = 0; i < slots.length; i++) {
+      const slotNum = slots[i]
       progressPercent.value = Math.round((i / slots.length) * 100)
-      progressText.value = `创建 ${i + 1}/${slots.length} (坑位 ${slots[i]})...`
-      const body = { ...form }
-      delete body.alias
-      body.name = generateName()
-      body.indexNum = slots[i]
-      body.mgenable = mgEnabled.value ? '1' : '0'
-      body.gmsenable = gmsEnabled.value ? '1' : '0'
-      body.enforce = enforceEnabled.value
-      if (body.s5Type === '0') { delete body.s5Type; delete body.s5IP; delete body.s5Port; delete body.s5User; delete body.s5Password }
-      if (!body.PINCode) delete body.PINCode
+      progressText.value = `创建 ${i + 1}/${slots.length} (坑位 ${slotNum})...`
       try {
-        await device.request('sdk:createContainer', body, 120000)
+        const body = buildBody(slotNum)
+        // 坑位上有运行中的容器时不自动启动（和PC端一致）
+        const hasRunning = device.containers.some(c => c.indexNum === slotNum && c.status === 'running')
+        if (hasRunning) body.start = false
+        const resp = await device.request('sdk:createContainer', body, 120000)
+        const respData = resp?.data
+        if (respData?.code !== undefined && respData.code !== 0) {
+          lastErr = respData.message || respData.msg || '创建返回错误'
+          failedSlots.push(slotNum)
+          continue
+        }
         if (alias) {
-          const displayAlias = slots.length > 1 ? `${alias}-${slots[i]}` : alias
+          const displayAlias = slots.length > 1 ? `${alias}-${slotNum}` : alias
           try { await device.setAlias(body.name, displayAlias) } catch {}
         }
         success++
-      } catch {}
+      } catch (e) {
+        lastErr = e.message || '请求失败'
+        failedSlots.push(slotNum)
+      }
       if (i < slots.length - 1) await new Promise(r => setTimeout(r, 2000))
     }
-    taskPhase.value = 'done'; taskDone.value = true
-    progressPercent.value = 100; progressText.value = `${success} 个容器创建完成`
-    showToast('创建完成')
+    if (success > 0) {
+      taskPhase.value = 'done'; taskDone.value = true
+      progressPercent.value = 100
+      if (failedSlots.length) {
+        progressText.value = `${success} 成功, ${failedSlots.length} 失败 (坑位 ${failedSlots.join(', ')})`
+      } else {
+        progressText.value = `${success} 个容器创建完成`
+      }
+      showToast('创建完成')
+    } else {
+      taskPhase.value = 'failed'; taskDone.value = true
+      progressPercent.value = 100
+      progressText.value = lastErr || '所有容器创建失败'
+      showToast('创建失败: ' + lastErr)
+    }
     device.refreshContainers()
   } catch (e) {
     taskPhase.value = 'failed'; taskDone.value = true; progressText.value = e.message || '创建失败'
@@ -279,8 +324,16 @@ async function doCreate() {
 
 onMounted(async () => {
   try {
-    const resp = await device.request('device:mirrors')
-    mirrors.value = resp.data || []
+    const [mirrorResp, modelResp] = await Promise.allSettled([
+      device.request('device:mirrors'),
+      device.request('sdk:getPhoneModels'),
+    ])
+    if (mirrorResp.status === 'fulfilled') mirrors.value = mirrorResp.value.data || []
+    if (modelResp.status === 'fulfilled') {
+      const d = modelResp.value.data
+      const pl = d?.data?.list || d?.list || d?.data || d || []
+      phoneModels.value = Array.isArray(pl) ? pl : []
+    }
   } catch {}
 })
 </script>

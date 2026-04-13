@@ -255,12 +255,9 @@ func (h *WSHub) Broadcast(event string, data interface{}) {
 	h.broadcast <- msg
 }
 
-// buildAliasMap 构建 containerName → alias 映射（读取当前容器列表）
+// buildAliasMap 构建 containerName → alias 映射
 func (h *WSHub) buildAliasMap() map[string]string {
-	h.containerMu.RLock()
-	parsed := h.parsedContainers
-	h.containerMu.RUnlock()
-	return h.alias.BuildAliasMap(parsed)
+	return h.alias.GetAliases()
 }
 
 func (c *WSClient) SendJSON(data interface{}) {
@@ -283,7 +280,7 @@ func (h *WSHub) KickUserWithReason(username, reason string) {
 		if client.username == username {
 			msg, _ := json.Marshal(map[string]interface{}{
 				"type": "event", "event": "user:kicked",
-				"data": map[string]string{"reason": reason},
+				"data": map[string]string{"username": username, "reason": reason},
 			})
 			select {
 			case client.send <- msg:
@@ -378,16 +375,16 @@ func (h *WSHub) fetchAndBroadcastContainers() {
 	h.parsedContainers = parsed
 	h.containerMu.Unlock()
 
-	// 触发旧别名迁移（只执行一次，从 container_aliases 表迁移到 slot_aliases 表）
+	// 触发旧别名迁移（只执行一次，从 slot_aliases 表迁移到 container_name_aliases 表）
 	if h.alias != nil {
-		h.alias.MigrateFromNameBased(parsed)
+		h.alias.MigrateFromSlotBased(parsed)
 	}
 
 	// 容器列表变化后广播最新别名映射（容器名可能因刷机而变化，需要重新映射）
 	if h.alias != nil {
 		aliasMsg, _ := json.Marshal(map[string]interface{}{
 			"type": "event", "event": "aliases:list",
-			"data": h.alias.BuildAliasMap(parsed),
+			"data": h.alias.GetAliases(),
 		})
 		h.broadcast <- aliasMsg
 	}

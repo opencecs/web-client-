@@ -28,7 +28,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
 import { useDeviceStore } from '../../stores/device.js'
 
@@ -119,7 +119,7 @@ function statusText(s) {
 
 function authText(num) {
   const info = slotStates.value[String(num)]
-  if (!info) return '未授权'
+  if (!info) return '' // 数据未加载时不显示"未授权"
   if (info.state === 0) return '正常'
   if (info.state === 1) return '即将到期'
   if (info.state === 2) return '已到期'
@@ -170,7 +170,13 @@ defineExpose({
   clearSelection() { selected.value = new Set(); emitSelection() }
 })
 
-onMounted(() => { fetchSlotStates(); fetchMirrorMap() })
+function loadData() {
+  fetchSlotStates()
+  fetchMirrorMap()
+}
+
+onMounted(() => { if (device.online) loadData() })
+watch(() => device.online, (v) => { if (v) loadData() })
 </script>
 
 <style scoped>

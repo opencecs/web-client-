@@ -18,12 +18,15 @@
       <div class="login-form">
         <van-cell-group inset>
           <van-field v-model="form.username" placeholder="请输入用户名" left-icon="contact-o"
-            clearable autocomplete="username" />
+            clearable autocomplete="username" :class="{ 'field-error': errorMsg }"
+            @input="errorMsg = ''" />
           <van-field v-model="form.password" placeholder="请输入密码" left-icon="lock"
             :type="showPwd ? 'text' : 'password'" autocomplete="current-password"
             :right-icon="showPwd ? 'eye-o' : 'closed-eye'" @click-right-icon="showPwd = !showPwd"
-            @keyup.enter="handleLogin" />
+            :class="{ 'field-error': errorMsg }"
+            @keyup.enter="handleLogin" @input="errorMsg = ''" />
         </van-cell-group>
+        <div v-if="errorMsg" class="login-error">{{ errorMsg }}</div>
 
         <div class="remember-row">
           <van-checkbox v-model="rememberMe" shape="square" icon-size="16px">记住账号密码</van-checkbox>
@@ -52,7 +55,6 @@ import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
 import { useDeviceStore } from '../../stores/device.js'
-import { showToast } from 'vant'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -62,6 +64,7 @@ const showPwd = ref(false)
 const form = reactive({ username: '', password: '' })
 const rememberMe = ref(false)
 const panelVersion = ref('...')
+const errorMsg = ref('')
 
 onMounted(async () => {
   try {
@@ -86,10 +89,11 @@ onMounted(async () => {
 
 async function handleLogin() {
   if (!form.username || !form.password) {
-    showToast('请输入用户名和密码')
+    errorMsg.value = '请输入用户名和密码'
     return
   }
   loading.value = true
+  errorMsg.value = ''
   try {
     await auth.login(form.username, form.password)
     if (rememberMe.value) {
@@ -104,13 +108,13 @@ async function handleLogin() {
   } catch (e) {
     const msg = e.response?.data?.error
     if (msg === 'invalid credentials') {
-      showToast('用户名或密码错误')
+      errorMsg.value = '用户名或密码错误'
     } else if (msg === 'account disabled') {
-      showToast('账号已禁用')
+      errorMsg.value = '账号已禁用'
     } else if (msg === 'account expired') {
-      showToast('账号已过期')
+      errorMsg.value = '账号已过期'
     } else {
-      showToast('登录失败')
+      errorMsg.value = '登录失败'
     }
   } finally {
     loading.value = false
@@ -191,6 +195,17 @@ async function handleLogin() {
 
 .remember-row {
   padding: 12px 24px 16px;
+}
+
+.login-error {
+  color: #f56c6c;
+  font-size: 13px;
+  text-align: center;
+  padding: 8px 16px 0;
+}
+
+:deep(.field-error .van-field__control) {
+  color: #f56c6c;
 }
 
 .login-hint {

@@ -341,7 +341,7 @@ onMounted(() => {
   if (device.online) fetchMirrorMap()
 })
 // 刷新页面后 WS 重连时重新获取镜像名称映射
-watch(() => device.online, (v) => { if (v && !Object.keys(mirrorMap.value).length) fetchMirrorMap() })
+watch(() => device.online, (v) => { if (v) fetchMirrorMap() })
 
 defineExpose({
   fetchList: () => device.refreshContainers()

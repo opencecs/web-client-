@@ -3,7 +3,11 @@
     <el-container v-if="auth.isLoggedIn" style="height: 100vh">
       <Sidebar />
       <el-container direction="vertical">
-        <el-header style="background: #141414; border-bottom: 1px solid #2a2a2a; display: flex; align-items: center; justify-content: flex-end; height: 50px; padding: 0 20px">
+        <el-header style="background: #141414; border-bottom: 1px solid #2a2a2a; display: flex; align-items: center; justify-content: space-between; height: 50px; padding: 0 20px">
+          <div class="ws-status" :class="device.online ? 'online' : 'offline'">
+            <span class="ws-dot"></span>
+            <span>{{ device.online ? '已连接' : '未连接' }}</span>
+          </div>
           <el-dropdown trigger="click" @command="handleCommand">
             <span style="color: #bbb; cursor: pointer; display: flex; align-items: center; gap: 8px">
               <el-avatar :size="28" style="background: #409eff">{{ auth.username?.charAt(0)?.toUpperCase() }}</el-avatar>
@@ -82,6 +86,23 @@ html.dark {
 .app-container {
   height: 100vh;
 }
+.ws-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #999;
+}
+.ws-status.online { color: #67c23a; }
+.ws-status.offline { color: #f56c6c; }
+.ws-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #999;
+}
+.ws-status.online .ws-dot { background: #67c23a; }
+.ws-status.offline .ws-dot { background: #f56c6c; }
 .mobile-switch-hint {
   position: fixed;
   bottom: 20px;

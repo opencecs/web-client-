@@ -11,7 +11,10 @@
       <div class="section-title">拉取任务 ({{ pullTasks.size }})</div>
       <div v-for="[url, task] in pullTasks" :key="url" class="pull-card">
         <div class="pull-header">
-          <span class="pull-name">{{ getShortName(url) }}</span>
+          <div class="pull-name">
+            <span style="font-weight: 600; color: #e0e0e0;">{{ task.name || getShortName(url) }}</span>
+            <span v-if="task.name" style="color: #888; font-size: 11px; margin-left: 4px;">({{ getShortName(url) }})</span>
+          </div>
           <van-tag :type="task.phase === 'done' ? 'success' : task.phase === 'failed' ? 'danger' : 'warning'" size="medium">
             {{ phaseLabel(task.phase) }}
           </van-tag>
@@ -64,7 +67,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useDeviceStore } from '../../stores/device.js'
-import { pullImage } from '../../utils/pullImage.js'
+import { pullImage, formatBytes } from '../../utils/pullImage.js'
 import { showToast, showConfirmDialog } from 'vant'
 
 const device = useDeviceStore()
@@ -130,7 +133,7 @@ function onRefresh() { refreshAll(); setTimeout(() => refreshing.value = false, 
 
 function pullFromMirror(row) {
   if (pullTasks.has(row.url)) return
-  pullTasks.set(row.url, { phase: 'pulling', percent: 0, text: '准备下载...' })
+  pullTasks.set(row.url, { phase: 'pulling', percent: 0, text: '准备下载...', name: row.name || '' })
   pullImage(row.url, {
     onProgress({ percent, text }) {
       const t = pullTasks.get(row.url); if (t) { t.phase = 'pulling'; t.percent = percent; t.text = text }
@@ -170,8 +173,92 @@ async function pruneImages() {
   } catch {}
 }
 
-onMounted(() => { if (device.online) refreshAll() })
+onMounted(() => {
+  if (device.online) refreshAll()
+  // 注册全局监听，自动发现后台拉取任务
+  device.onEvent(globalPullHandler)
+})
 watch(() => device.online, (v) => { if (v) refreshAll() })
+
+onBeforeUnmount(() => {
+  device.offEvent(globalPullHandler)
+})
+
+// 全局事件监听：刷新页面后自动恢复正在进行的拉取任务
+function globalPullHandler(msg) {
+  if (msg.event !== 'task:progress') return
+  if (msg.data?.action !== 'pullImage') return
+  const url = msg.data.imageUrl
+  if (!url) return
+  // 已被 pullImage() 的 handler 管理，跳过
+  if (pullTasks.has(url)) return
+  // 收到完成事件但本地没有记录，跳过
+  if (msg.data.done) return
+  // 发现后台拉取任务，自动显示
+  const mirror = mirrors.value.find(m => m.url === url)
+  pullTasks.set(url, { phase: 'pulling', percent: 0, text: '检测到后台拉取任务...', name: mirror?.name || '' })
+  startTrackingPull(url)
+}
+
+function startTrackingPull(url) {
+  const handler = (msg) => {
+    if (msg.event !== 'task:progress') return
+    if (msg.data?.action !== 'pullImage') return
+    if (msg.data.imageUrl !== url) return
+
+    if (msg.data.done) {
+      const task = pullTasks.get(url)
+      if (task) {
+        task.phase = 'done'
+        task.text = msg.data.exists ? '镜像已存在' : '拉取完成'
+      }
+      setTimeout(() => { pullTasks.delete(url) }, 3000)
+      device.offEvent(handler)
+      fetchImages()
+      return
+    }
+
+    const chunk = msg.data.chunk || ''
+    const lines = chunk.split('\n')
+    for (const line of lines) {
+      let eventData = null
+      if (line.startsWith('data: ')) {
+        try { eventData = JSON.parse(line.slice(6)) } catch {}
+      } else if (line.trim().startsWith('{')) {
+        try { eventData = JSON.parse(line.trim()) } catch {}
+      }
+      if (!eventData) continue
+
+      const task = pullTasks.get(url)
+      if (!task) continue
+
+      if (eventData.error) {
+        task.phase = 'failed'
+        task.text = eventData.error
+        setTimeout(() => { pullTasks.delete(url) }, 5000)
+        device.offEvent(handler)
+        return
+      }
+      if (eventData.status === 'Downloading' && eventData.progressDetail?.total) {
+        const current = eventData.progressDetail.current || 0
+        const total = eventData.progressDetail.total
+        task.phase = 'pulling'
+        task.percent = Math.min(99, Math.round(current / total * 100))
+        task.text = `下载中: ${formatBytes(current)} / ${formatBytes(total)}`
+      } else if (eventData.status === 'Extracting' || eventData.status === 'Pull complete') {
+        task.phase = 'extracting'
+        task.text = eventData.status === 'Extracting' ? '正在解压镜像层...' : eventData.status
+      } else if (eventData.status === 'No operation' || eventData.message === 'Image already exists') {
+        task.phase = 'done'
+        task.text = '镜像已存在'
+        setTimeout(() => { pullTasks.delete(url) }, 3000)
+        device.offEvent(handler)
+        fetchImages()
+      }
+    }
+  }
+  device.onEvent(handler)
+}
 </script>
 
 <style scoped>

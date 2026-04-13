@@ -21,12 +21,15 @@
       <el-card class="login-card" :body-style="{ padding: '32px 32px 24px' }">
         <el-form @submit.prevent="handleLogin" :model="form">
           <el-form-item>
-            <el-input v-model="form.username" placeholder="请输入用户名" prefix-icon="User" size="large" />
+            <el-input v-model="form.username" placeholder="请输入用户名" prefix-icon="User" size="large"
+              :class="{ 'is-error': errorMsg }" @input="errorMsg = ''" />
           </el-form-item>
           <el-form-item>
             <el-input v-model="form.password" placeholder="请输入密码" type="password" prefix-icon="Lock"
-              size="large" show-password @keyup.enter="handleLogin" />
+              size="large" show-password :class="{ 'is-error': errorMsg }"
+              @keyup.enter="handleLogin" @input="errorMsg = ''" />
           </el-form-item>
+          <div v-if="errorMsg" class="login-error">{{ errorMsg }}</div>
           <el-form-item style="margin-bottom: 8px">
             <div style="display: flex; align-items: center; width: 100%">
               <el-checkbox v-model="rememberMe" label="记住账号密码" />
@@ -69,7 +72,6 @@ import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import { useDeviceStore } from '../stores/device.js'
-import { ElMessage } from 'element-plus'
 import { InfoFilled } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -80,6 +82,7 @@ const form = reactive({ username: '', password: '' })
 const rememberMe = ref(false)
 const showInfo = ref(false)
 const panelVersion = ref('...')
+const errorMsg = ref('')
 
 // 加载记住的用户名密码 + 获取版本号
 onMounted(async () => {
@@ -114,10 +117,11 @@ onMounted(async () => {
 
 async function handleLogin() {
   if (!form.username || !form.password) {
-    ElMessage.warning('请输入用户名和密码')
+    errorMsg.value = '请输入用户名和密码'
     return
   }
   loading.value = true
+  errorMsg.value = ''
   try {
     await auth.login(form.username, form.password)
     // 记住/清除账号密码
@@ -133,13 +137,13 @@ async function handleLogin() {
   } catch (e) {
     const msg = e.response?.data?.error
     if (msg === 'invalid credentials') {
-      ElMessage.error('用户名或密码错误')
+      errorMsg.value = '用户名或密码错误'
     } else if (msg === 'account disabled') {
-      ElMessage.error('账号已禁用')
+      errorMsg.value = '账号已禁用'
     } else if (msg === 'account expired') {
-      ElMessage.error('账号已过期')
+      errorMsg.value = '账号已过期'
     } else {
-      ElMessage.error('登录失败')
+      errorMsg.value = '登录失败'
     }
   } finally {
     loading.value = false
@@ -236,6 +240,17 @@ async function handleLogin() {
   font-size: 15px;
   letter-spacing: 4px;
   border-radius: 8px;
+}
+
+.login-error {
+  color: #f56c6c;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+:deep(.is-error .el-input__wrapper) {
+  box-shadow: 0 0 0 1px #f56c6c inset;
 }
 
 /* 默认账号提示 */

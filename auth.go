@@ -470,16 +470,17 @@ func (s *AuthService) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 
-	var expiresAt *time.Time
+	var expiresAtStr *string
 	if req.ExpiresAt != nil && *req.ExpiresAt != "" {
 		t, err := time.Parse(time.RFC3339, *req.ExpiresAt)
 		if err == nil {
-			expiresAt = &t
+			s := t.UTC().Format(time.RFC3339)
+			expiresAtStr = &s
 		}
 	}
 
 	result, err := s.db.Exec("INSERT INTO users (username, password_hash, role, expires_at, enabled) VALUES (?, ?, ?, ?, 1)",
-		req.Username, string(hash), req.Role, expiresAt)
+		req.Username, string(hash), req.Role, expiresAtStr)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			jsonError(w, "username already exists", 409)
@@ -533,7 +534,7 @@ func (s *AuthService) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		} else {
 			t, err := time.Parse(time.RFC3339, *req.ExpiresAt)
 			if err == nil {
-				if _, err := s.db.Exec("UPDATE users SET expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", t, id); err != nil {
+				if _, err := s.db.Exec("UPDATE users SET expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", t.UTC().Format(time.RFC3339), id); err != nil {
 					jsonError(w, "更新过期时间失败: "+err.Error(), 500)
 					return
 				}
@@ -570,19 +571,44 @@ func (s *AuthService) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
 func (s *AuthService) CheckExpiry(hub *WSHub, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
-		now := time.Now().UTC().Format(time.RFC3339)
-		rows, err := s.db.Query("SELECT id, username FROM users WHERE enabled = 1 AND expires_at IS NOT NULL AND expires_at < ?", now)
+		now := time.Now()
+		rows, err := s.db.Query("SELECT id, username, expires_at FROM users WHERE enabled = 1 AND expires_at IS NOT NULL")
 		if err != nil {
 			continue
 		}
 		for rows.Next() {
 			var id int64
 			var username string
-			rows.Scan(&id, &username)
-			s.db.Exec("UPDATE users SET enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?", id)
-			log.Printf("[Auth] User '%s' expired, disabled", username)
-			hub.Broadcast("user:kicked", map[string]interface{}{"username": username, "reason": "expired"})
-			hub.KickUser(username)
+			var expiresStr sql.NullString
+			if rows.Scan(&id, &username, &expiresStr) != nil || !expiresStr.Valid {
+				continue
+			}
+			// 按多种格式尝试解析（兼容 SQLite 不同存储格式）
+			var expires time.Time
+			var parsed bool
+			for _, layout := range []string{
+				time.RFC3339, time.RFC3339Nano,
+				"2006-01-02T15:04:05Z",
+				"2006-01-02 15:04:05.999999999 -0700 MST", // Go time.Time.String() 格式
+				"2006-01-02 15:04:05.999 +0000 UTC",       // Go 常见输出
+				"2006-01-02 15:04:05 +0000 UTC",
+				"2006-01-02 15:04:05+00:00",
+				"2006-01-02 15:04:05",
+			} {
+				if t, err := time.Parse(layout, expiresStr.String); err == nil {
+					expires = t
+					parsed = true
+					break
+				}
+			}
+			if !parsed {
+				continue
+			}
+			if expires.Before(now) {
+				s.db.Exec("UPDATE users SET enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?", id)
+				log.Printf("[Auth] User '%s' expired (expires=%s, now=%s)", username, expires.Format(time.RFC3339), now.Format(time.RFC3339))
+				hub.KickUserWithReason(username, "expired")
+			}
 		}
 		rows.Close()
 	}

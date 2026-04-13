@@ -19,7 +19,7 @@
       </div>
     </div>
 
-    <van-empty v-if="filteredContainers.length === 0" description="暂无容器" />
+    <van-empty v-if="filteredContainers.length === 0" description="暂无运行中的容器" />
   </div>
 </template>
 
@@ -36,7 +36,7 @@ const device = useDeviceStore()
 
 const screenshots = computed(() => device.screenshots || {})
 const filteredContainers = computed(() =>
-  device.containers.filter(c => auth.canSlot(c.indexNum))
+  device.containers.filter(c => auth.canSlot(c.indexNum) && c.status === 'running')
 )
 
 function goProjection(c) {
@@ -89,7 +89,6 @@ function refresh() {
   font-weight: 700;
   color: #555;
 }
-
 .screenshot-name {
   font-size: 11px;
   color: #999;

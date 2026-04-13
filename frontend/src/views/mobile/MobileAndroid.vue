@@ -19,12 +19,10 @@
         </div>
 
         <div v-for="c in filteredContainers" :key="c.name" class="slot-card"
-          :class="{ selected: selectedNames.has(c.name) }"
-          @click="goDetail(c)" @touchstart.passive="onTouchStart(c.name)" @touchend="onTouchEnd"
-          @touchmove="onTouchEnd">
-          <!-- 截图预览 -->
-          <div class="slot-preview">
-            <img v-if="screenshots[c.indexNum]" :src="screenshots[c.indexNum]" class="slot-img" />
+          :class="{ selected: selectedNames.has(c.name) }">
+          <!-- 左侧：截图预览 → 点击进入详情 -->
+          <div class="slot-preview" @click="goDetail(c)">
+            <img v-if="c.status === 'running' && screenshots[c.indexNum]" :src="screenshots[c.indexNum]" class="slot-img" />
             <div v-else class="slot-placeholder">
               <span>{{ c.indexNum }}</span>
             </div>
@@ -32,20 +30,19 @@
               {{ stateText(c) }}
             </div>
           </div>
-          <!-- 信息 -->
-          <div class="slot-info">
-            <div class="slot-name">{{ device.displayName(c.name) }}</div>
-            <div class="slot-meta">
-              <span class="meta-status" :class="stateClass(c)">{{ stateText(c) }}</span>
-              <span class="meta-sep">·</span>
-              <span>坑位 {{ c.indexNum }}</span>
+          <!-- 右侧：信息+勾选 → 点击勾选 -->
+          <div class="slot-right" @click="toggleSelect(c.name)">
+            <div class="slot-info">
+              <div class="slot-name">{{ device.displayName(c.name) }}</div>
+              <div class="slot-meta">
+                <span class="meta-status" :class="stateClass(c)">{{ stateText(c) }}</span>
+                <span class="meta-sep">·</span>
+                <span>坑位 {{ c.indexNum }}</span>
+              </div>
+              <div class="slot-image" v-if="c.image">{{ shortImageTag(c.image) }}</div>
             </div>
-            <div class="slot-image" v-if="c.image">{{ shortImageTag(c.image) }}</div>
-          </div>
-          <!-- 选择框 -->
-          <div class="slot-check" @click.stop="toggleSelect(c.name)">
-            <van-checkbox v-model="selectMap[c.name]" shape="square" icon-size="18px"
-              @change="onCheckChange(c.name, $event)" />
+            <van-checkbox v-model="selectMap[c.name]" shape="square" icon-size="22px"
+              @click.stop @change="onCheckChange(c.name, $event)" />
           </div>
         </div>
       </div>
@@ -84,8 +81,6 @@ const selectedNames = ref(new Set())
 const selectMap = reactive({})
 
 const screenshots = computed(() => device.screenshots || {})
-
-// 镜像 URL → 中文名映射
 const mirrorMap = ref({})
 
 async function fetchMirrorMap() {
@@ -107,21 +102,6 @@ function shortImageTag(image) {
   return parts[parts.length - 1] || image
 }
 
-// 长按选择（500ms）
-let longPressTimer = null
-let longPressed = false
-
-function onTouchStart(name) {
-  longPressed = false
-  longPressTimer = setTimeout(() => {
-    longPressed = true
-    toggleSelect(name)
-  }, 500)
-}
-function onTouchEnd() {
-  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null }
-}
-
 // 按权限过滤可见容器
 const filteredContainers = computed(() => {
   return device.containers.filter(c => auth.canSlot(c.indexNum))
@@ -131,6 +111,7 @@ const batchActions = [
   { name: '启动选中', value: 'start' },
   { name: '停止选中', value: 'stop' },
   { name: '重启选中', value: 'restart' },
+  { name: '重置选中', value: 'reset', color: '#ee0a24' },
 ]
 
 function stateClass(c) {
@@ -154,11 +135,6 @@ function stateText(c) {
 }
 
 function goDetail(c) {
-  if (longPressed) { longPressed = false; return }
-  if (selectedNames.value.size > 0) {
-    toggleSelect(c.name)
-    return
-  }
   router.push(`/m/android/container/${c.name}`)
 }
 
@@ -199,14 +175,24 @@ function clearSelection() {
   Object.keys(selectMap).forEach(k => selectMap[k] = false)
 }
 
+const actionLabels = { start: '启动', stop: '停止', restart: '重启', reset: '重置' }
+
 async function batchCommand(action) {
   const names = [...selectedNames.value]
   if (names.length === 0) { showToast('请先选择容器'); return }
+  const label = actionLabels[action] || action
   try {
+    await showConfirmDialog({
+      title: `批量${label}`,
+      message: `确认${label}选中的 ${names.length} 个容器？`
+    })
+  } catch { return }
+  try {
+    showToast({ message: `正在${label}...`, type: 'loading', duration: 0 })
     for (const name of names) {
       await device.request(`container:${action}`, { name })
     }
-    showToast(`${action} 完成`)
+    showToast(`${label}完成`)
     device.refreshContainers()
     clearSelection()
   } catch (e) {
@@ -214,12 +200,60 @@ async function batchCommand(action) {
   }
 }
 
-function batchStart() { batchCommand('start') }
-function batchStop() { batchCommand('stop') }
+async function batchStart() {
+  const names = [...selectedNames.value]
+  if (names.length === 0) { showToast('请先选择容器'); return }
 
-function onBatchAction(action) {
+  // 找出选中的停止状态容器，以及同坑位需要先停掉的运行中容器
+  const toStart = []
+  const toStopFirst = []
+  for (const name of names) {
+    const c = device.containers.find(x => x.name === name)
+    if (!c) continue
+    if (c.status === 'running') continue // 已经在跑，跳过
+    toStart.push(c)
+    // 同坑位有运行中的容器，需要先停掉
+    const running = device.containers.find(x => x.indexNum === c.indexNum && x.status === 'running' && x.name !== name)
+    if (running && !toStopFirst.find(x => x.name === running.name)) {
+      toStopFirst.push(running)
+    }
+  }
+
+  if (toStart.length === 0) { showToast('选中的容器都已在运行'); return }
+
+  let msg = `启动 ${toStart.length} 个容器？`
+  if (toStopFirst.length > 0) {
+    msg = `将停止 ${toStopFirst.length} 个运行中的容器，然后启动 ${toStart.length} 个容器，是否继续？`
+  }
+  try {
+    await showConfirmDialog({ title: '启动', message: msg })
+  } catch { return }
+
+  try {
+    showToast({ message: '正在切换...', type: 'loading', duration: 0 })
+    // 先停掉同坑位运行中的
+    for (const c of toStopFirst) {
+      await device.request('container:stop', { name: c.name })
+    }
+    if (toStopFirst.length > 0) {
+      await new Promise(r => setTimeout(r, 2000))
+    }
+    // 再启动选中的
+    for (const c of toStart) {
+      await device.request('container:start', { name: c.name })
+    }
+    showToast('启动请求已发送，等待开机...')
+    device.refreshContainers()
+    clearSelection()
+  } catch (e) {
+    showToast(e.message || '操作失败')
+  }
+}
+async function batchStop() { await batchCommand('stop') }
+
+async function onBatchAction(action) {
   if (selectedNames.value.size === 0) { showToast('请先选择容器'); return }
-  batchCommand(action.value)
+  await batchCommand(action.value)
 }
 
 function onRefresh() {
@@ -281,6 +315,7 @@ watch(() => device.online, (v) => { if (v) loadData() })
   position: relative;
   flex-shrink: 0;
   background: #141414;
+  cursor: pointer;
 }
 .slot-img {
   width: 100%;
@@ -311,9 +346,17 @@ watch(() => device.online, (v) => { if (v) loadData() })
 .slot-status.running { background: rgba(103, 194, 58, 0.8); }
 .slot-status.stopped { background: rgba(153, 153, 153, 0.8); }
 
+.slot-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  min-width: 0;
+  cursor: pointer;
+}
+
 .slot-info {
   flex: 1;
-  padding: 0 12px;
   min-width: 0;
 }
 .slot-name {
@@ -344,11 +387,6 @@ watch(() => device.online, (v) => { if (v) loadData() })
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.slot-check {
-  flex-shrink: 0;
-  padding: 8px;
 }
 
 /* 底部批量操作条（在 TabBar 上方） */

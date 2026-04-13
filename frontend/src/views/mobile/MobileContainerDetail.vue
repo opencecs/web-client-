@@ -5,10 +5,20 @@
     <!-- 截图预览 -->
     <div class="preview-section">
       <div class="preview-card">
-        <img v-if="screenshot" :src="screenshot" class="preview-img" @click="goProjection" />
-        <div v-else class="preview-placeholder" @click="goProjection">
-          <van-icon name="play-circle-o" size="48" color="#555" />
-          <span>点击投屏</span>
+        <template v-if="isRunning">
+          <img v-if="screenshot" :src="screenshot" class="preview-img" @click="goProjection" />
+          <div v-else class="preview-placeholder" @click="goProjection">
+            <van-icon name="play-circle-o" size="48" color="#555" />
+            <span>点击投屏</span>
+          </div>
+        </template>
+        <div v-else-if="booting" class="preview-placeholder">
+          <van-loading size="36" color="#409eff" />
+          <span style="color: #409eff">启动中...</span>
+        </div>
+        <div v-else class="preview-placeholder">
+          <van-icon name="pause-circle-o" size="48" color="#555" />
+          <span>已停止</span>
         </div>
       </div>
     </div>
@@ -33,10 +43,10 @@
     <div class="action-section">
       <div class="section-title">操作</div>
       <van-grid :column-num="4" :border="false" class="action-grid">
-        <van-grid-item icon="play-circle-o" text="投屏" @click="goProjection" v-if="auth.can('projection')" />
-        <van-grid-item icon="play" text="启动" @click="doAction('start')" v-if="auth.can('container_start')" />
-        <van-grid-item icon="pause" text="停止" @click="doAction('stop')" v-if="auth.can('container_start')" />
-        <van-grid-item icon="replay" text="重启" @click="doAction('restart')" v-if="auth.can('container_restart')" />
+        <van-grid-item icon="play-circle-o" text="投屏" @click="goProjection" v-if="auth.can('projection') && isRunning" />
+        <van-grid-item icon="play" text="启动" @click="doStart" v-if="auth.can('container_start') && !isRunning" />
+        <van-grid-item icon="pause" text="停止" @click="doAction('stop')" v-if="auth.can('container_start') && isRunning" />
+        <van-grid-item icon="replay" text="重启" @click="doAction('restart')" v-if="auth.can('container_restart') && isRunning" />
         <van-grid-item icon="revoke" text="重置" @click="confirmAction('reset', '确认重置此容器？')" v-if="auth.can('container_reset')" />
         <van-grid-item icon="delete-o" text="删除" @click="confirmAction('delete', '确认删除此容器？')" v-if="auth.can('container_delete')" />
         <van-grid-item icon="edit" text="重命名" @click="showRename = true" v-if="auth.can('container_rename')" />
@@ -97,11 +107,15 @@ const device = useDeviceStore()
 
 const containerName = computed(() => route.params.name)
 const container = computed(() => device.containers.find(c => c.name === containerName.value))
+const isRunning = computed(() => container.value?.status === 'running')
 const displayName = computed(() => device.displayName(containerName.value))
 const screenshot = computed(() => {
+  if (!isRunning.value) return null
   const idx = container.value?.indexNum
   return idx ? device.screenshots[idx] : null
 })
+
+const booting = ref(false)
 
 // 镜像 URL → 中文名映射
 const mirrorMap = ref({})
@@ -153,8 +167,60 @@ const proxyForm = reactive({ addr: '', port: '', usr: '', pwd: '', type: '1' })
 
 function goProjection() {
   if (!auth.can('projection')) { showToast('无投屏权限'); return }
+  if (!isRunning.value) { showToast('容器未运行'); return }
   router.push(`/m/android/projection/${containerName.value}`)
 }
+
+// 启动容器：处理同坑位冲突 + 等待启动完成
+async function doStart() {
+  const slot = container.value?.indexNum
+  // 检查同坑位是否有正在运行的容器
+  const running = device.containers.find(c => c.indexNum === slot && c.status === 'running' && c.name !== containerName.value)
+  if (running) {
+    try {
+      await showConfirmDialog({
+        title: '切换容器',
+        message: `坑位 ${slot} 当前运行的是 ${device.displayName(running.name)}，启动此容器将停止它，是否继续？`
+      })
+    } catch { return }
+    // 先停掉同坑位运行中的容器
+    try {
+      showToast({ message: '正在停止旧容器...', type: 'loading', duration: 0 })
+      await device.request('container:stop', { name: running.name })
+      // 等 2 秒让容器完全停止
+      await new Promise(r => setTimeout(r, 2000))
+    } catch (e) {
+      showToast('停止旧容器失败: ' + (e.message || ''))
+      return
+    }
+  }
+  booting.value = true
+  try {
+    showToast({ message: '正在启动，等待开机...', type: 'loading', duration: 0 })
+    await device.request('container:start', { name: containerName.value })
+    // 60秒超时兜底
+    bootTimeout = setTimeout(() => {
+      if (booting.value) {
+        booting.value = false
+        showToast('启动超时，请手动刷新')
+      }
+    }, 60000)
+  } catch (e) {
+    booting.value = false
+    showToast(e.message || '启动失败')
+  }
+}
+
+let bootTimeout = null
+
+// 监听容器状态：启动中 → running 时自动完成
+watch(isRunning, (running) => {
+  if (running && booting.value) {
+    booting.value = false
+    if (bootTimeout) { clearTimeout(bootTimeout); bootTimeout = null }
+    showToast('启动成功，可以投屏了')
+  }
+})
 
 async function doAction(action) {
   try {

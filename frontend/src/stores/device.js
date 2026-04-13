@@ -79,6 +79,10 @@ export const useDeviceStore = defineStore('device', () => {
             containerAliases.value = msg.data || {}
           }
           if (msg.event === 'user:kicked') {
+            const kickedUser = msg.data?.username
+            const currentUser = auth.user?.username
+            // 只处理针对自己的踢出事件
+            if (kickedUser && currentUser && kickedUser !== currentUser) return
             _kicked = true
             const reason = msg.data?.reason
             if (reason === 'password_changed') {

@@ -87,12 +87,11 @@ func (c *WSClient) handleAliasAction(req WSRequest) {
 	case "alias:set":
 		name := getStr(req.Data, "name")
 		alias := getStr(req.Data, "alias")
-		slot := c.getContainerSlot(name)
-		if slot <= 0 {
-			c.sendResponse(req.ID, false, "找不到容器", nil)
+		if name == "" {
+			c.sendResponse(req.ID, false, "容器名不能为空", nil)
 			return
 		}
-		if err := c.hub.alias.SetAlias(slot, alias); err != nil {
+		if err := c.hub.alias.SetAlias(name, alias); err != nil {
 			c.sendResponse(req.ID, false, "设置别名失败: "+err.Error(), nil)
 		} else {
 			c.sendResponse(req.ID, true, "ok", nil)
@@ -100,12 +99,11 @@ func (c *WSClient) handleAliasAction(req WSRequest) {
 		}
 	case "alias:delete":
 		name := getStr(req.Data, "name")
-		slot := c.getContainerSlot(name)
-		if slot <= 0 {
-			c.sendResponse(req.ID, false, "找不到容器", nil)
+		if name == "" {
+			c.sendResponse(req.ID, false, "容器名不能为空", nil)
 			return
 		}
-		if err := c.hub.alias.DeleteAlias(slot); err != nil {
+		if err := c.hub.alias.DeleteAlias(name); err != nil {
 			c.sendResponse(req.ID, false, "删除别名失败: "+err.Error(), nil)
 		} else {
 			c.sendResponse(req.ID, true, "ok", nil)

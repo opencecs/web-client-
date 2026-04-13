@@ -7,7 +7,10 @@
       </template>
       <div v-for="[url, task] in pullTasks" :key="url" style="margin-bottom: 16px; padding: 12px; background: #252525; border-radius: 6px">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
-          <span style="color: #ccc; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;" :title="url">{{ getImageShortName(url) }}</span>
+          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;" :title="url">
+            <span style="color: #e0e0e0; font-size: 13px; font-weight: 600;">{{ task.name || getImageShortName(url) }}</span>
+            <span v-if="task.name" style="color: #888; font-size: 12px; margin-left: 4px;">({{ getImageShortName(url) }})</span>
+          </div>
           <el-tag :type="task.phase === 'done' ? 'success' : task.phase === 'failed' ? 'danger' : 'warning'" size="small">
             {{ phaseLabel(task.phase) }}
           </el-tag>
@@ -170,7 +173,7 @@ function refreshAll() {
 
 function pullFromMirror(row) {
   if (pullTasks.has(row.url)) { ElMessage.warning('该镜像正在拉取中'); return }
-  pullTasks.set(row.url, { phase: 'pulling', percent: 0, text: '准备下载...' })
+  pullTasks.set(row.url, { phase: 'pulling', percent: 0, text: '准备下载...', name: row.name || '' })
   pullImage(row.url, {
     onProgress({ percent, text }) {
       const task = pullTasks.get(row.url)
@@ -216,7 +219,8 @@ function globalPullHandler(msg) {
     return
   }
   // 创建新的进度条跟踪
-  pullTasks.set(url, { phase: 'pulling', percent: 0, text: '检测到后台拉取任务...' })
+  const mirror = mirrors.value.find(m => m.url === url)
+  pullTasks.set(url, { phase: 'pulling', percent: 0, text: '检测到后台拉取任务...', name: mirror?.name || '' })
   // 后续事件会被 pullImage.js 的监听处理不到（因为没有调 pullImage()），
   // 所以这里注册一个专门的监听器
   startTrackingPull(url)
