@@ -90,41 +90,52 @@ func (p *ContainerUploadProxy) checkAccess(r *http.Request, containerName string
 	return "找不到容器"
 }
 
-// forwardMultipart 转发 multipart 文件到目标 URL
+// forwardMultipart 流式转发 multipart 文件到目标 URL（不缓存整个文件到内存）
 func (p *ContainerUploadProxy) forwardMultipart(w http.ResponseWriter, r *http.Request, targetURL, containerName string) {
-	// 解析上传的文件
-	if err := r.ParseMultipartForm(256 << 20); err != nil { // 256MB
+	// 直接从请求体流式读取 multipart，不调用 ParseMultipartForm
+	reader, err := r.MultipartReader()
+	if err != nil {
 		jsonError(w, "文件解析失败: "+err.Error(), 400)
 		return
 	}
 
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		jsonError(w, "缺少文件", 400)
-		return
+	// 找到 file 字段
+	var part *multipart.Part
+	for {
+		p, err := reader.NextPart()
+		if err != nil {
+			jsonError(w, "缺少文件", 400)
+			return
+		}
+		if p.FormName() == "file" {
+			part = p
+			break
+		}
+		p.Close()
 	}
-	defer file.Close()
+	defer part.Close()
 
-	log.Printf("[Upload] 容器 %s: 上传 %s (%d bytes) → %s", containerName, header.Filename, header.Size, targetURL)
+	filename := part.FileName()
+	log.Printf("[Upload] 容器 %s: 上传 %s → %s", containerName, filename, targetURL)
 
-	// 构建转发请求
+	// 构建转发请求，流式 pipe
 	pr, pw := io.Pipe()
 	writer := multipart.NewWriter(pw)
 	go func() {
 		defer pw.Close()
-		part, err := writer.CreateFormFile("file", header.Filename)
+		dst, err := writer.CreateFormFile("file", filename)
 		if err != nil {
 			pw.CloseWithError(err)
 			return
 		}
-		if _, err := io.Copy(part, file); err != nil {
+		if _, err := io.Copy(dst, part); err != nil {
 			pw.CloseWithError(err)
 			return
 		}
 		writer.Close()
 	}()
 
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Minute}
 	req, err := http.NewRequest("POST", targetURL, pr)
 	if err != nil {
 		jsonError(w, "请求创建失败", 500)
@@ -149,8 +160,8 @@ func (p *ContainerUploadProxy) forwardMultipart(w http.ResponseWriter, r *http.R
 	io.Copy(w, resp.Body)
 
 	// APK 自动安装
-	if strings.HasSuffix(strings.ToLower(header.Filename), ".apk") && resp.StatusCode < 400 {
-		go p.autoInstallAPK(containerName, header.Filename)
+	if strings.HasSuffix(strings.ToLower(filename), ".apk") && resp.StatusCode < 400 {
+		go p.autoInstallAPK(containerName, filename)
 	}
 }
 

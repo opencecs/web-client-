@@ -31,9 +31,15 @@
     </div>
     <!-- 安卓导航按钮 -->
     <div class="projection-footer">
-      <button class="android-btn" title="最近任务" @mousedown.stop @click="sendCmd('goClean')">□</button>
-      <button class="android-btn" title="主页" @mousedown.stop @click="sendCmd('goHome')">○</button>
-      <button class="android-btn" title="返回" @mousedown.stop @click="sendCmd('goBack')">◁</button>
+      <button class="android-btn" title="最近任务" @mousedown.stop @click="sendCmd('goClean')">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" stroke-width="1.6"/></svg>
+      </button>
+      <button class="android-btn" title="主页" @mousedown.stop @click="sendCmd('goHome')">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.6"/></svg>
+      </button>
+      <button class="android-btn" title="返回" @mousedown.stop @click="sendCmd('goBack')">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </div>
 
     <!-- 短信弹窗 -->
@@ -286,7 +292,7 @@ async function doUpload(e) {
   const form = new FormData()
   form.append('file', file)
   try {
-    await api.post(`/container/${props.container.name}/upload`, form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 })
+    await api.post(`/container/${props.container.name}/upload`, form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 600000 })
   } catch {}
   if (uploadInput.value) uploadInput.value.value = ''
 }

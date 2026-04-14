@@ -212,8 +212,9 @@ function selectImage(img) { form.imageUrl = img.url; showImagePicker.value = fal
 
 function nextStep() {
   if (step.value === 0) {
-    if (!form.imageUrl) { showToast('请选择镜像'); return }
+    if (selectedSlots.value.size === 0 && !form.imageUrl) { showToast('请选择坑位和镜像'); return }
     if (selectedSlots.value.size === 0) { showToast('请选择坑位'); return }
+    if (!form.imageUrl) { showToast('请选择镜像'); return }
   }
   step.value++
 }

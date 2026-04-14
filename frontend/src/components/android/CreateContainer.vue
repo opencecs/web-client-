@@ -533,8 +533,9 @@ async function loadData() {
 }
 
 async function doCreate() {
-  if (!form.imageUrl) { ElMessage.warning('请选择或输入镜像'); return }
+  if (selectedSlots.value.size === 0 && !form.imageUrl) { ElMessage.warning('请选择坑位和镜像'); return }
   if (selectedSlots.value.size === 0) { ElMessage.warning('请选择坑位'); return }
+  if (!form.imageUrl) { ElMessage.warning('请选择镜像'); return }
   creating.value = true
   try {
     // 先拉取镜像（只需一次）

@@ -19,8 +19,12 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/ws': { target: 'ws://localhost:8080', ws: true }
+      '/api': {
+        target: 'http://localhost:8181',
+        timeout: 600000, // 10分钟，大文件上传需要
+      },
+      '/ws': { target: 'ws://localhost:8181', ws: true },
+      '/lgcloud': { target: 'ws://localhost:8181', ws: true }
     }
   },
   build: {

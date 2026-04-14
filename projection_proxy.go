@@ -90,7 +90,12 @@ func (p *ProjectionProxy) evictExisting(indexNum int) {
 		// 关闭连接（先优雅关闭容器端，避免 FIN_WAIT2）
 		closeDeviceConn(old.deviceConn)
 		old.frontConn.Close()
-		<-old.done
+		// 等待旧会话退出，最多等 3 秒
+		select {
+		case <-old.done:
+		case <-time.After(3 * time.Second):
+			log.Printf("[投屏代理] 坑位 %d 旧连接清理超时，强制继续", indexNum)
+		}
 		p.active.Delete(indexNum)
 	}
 }
@@ -444,30 +449,40 @@ func (p *ProjectionProxy) HandleProjection(w http.ResponseWriter, r *http.Reques
 	}
 	defer frontConn.Close()
 
+	// 坑位级互斥锁，防止同一坑位并发连接竞争
+	slotMu := p.getSlotLock(indexNum)
+	slotMu.Lock()
+
 	// 释放该坑位的预热连接（token 请求时已提前释放，这里兜底）
 	p.takeWarm(indexNum)
 
 	// 踢掉该坑位上已有的连接
 	p.evictExisting(indexNum)
 
-	// 等容器清理信令会话（预热连接可能刚被 handleProjectionToken 异步释放）
-	time.Sleep(300 * time.Millisecond)
+	// 等容器清理信令会话（容器只允许单 WS 连接，必须等旧连接完全释放）
+	time.Sleep(800 * time.Millisecond)
 
-	// 连接容器（大缓冲低延迟，服务端重试一次）
+	// 连接容器（大缓冲低延迟，多次重试）
 	projDialer := websocket.Dialer{
 		ReadBufferSize:  32 * 1024,
 		WriteBufferSize: 32 * 1024,
 	}
-	deviceConn, _, err := projDialer.Dial(targetURL, nil)
-	if err != nil {
-		time.Sleep(500 * time.Millisecond)
+	var deviceConn *websocket.Conn
+	for attempt := 0; attempt < 4; attempt++ {
 		deviceConn, _, err = projDialer.Dial(targetURL, nil)
-		if err != nil {
-			log.Printf("[投屏代理] 连接容器失败 (坑位 %d): %v", indexNum, err)
-			frontConn.WriteMessage(websocket.CloseMessage,
-				websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "无法连接容器"))
-			return
+		if err == nil {
+			break
 		}
+		log.Printf("[投屏代理] 连接容器重试 %d/4 (坑位 %d): %v", attempt+1, indexNum, err)
+		time.Sleep(time.Duration(500*(attempt+1)) * time.Millisecond)
+	}
+	slotMu.Unlock()
+
+	if err != nil {
+		log.Printf("[投屏代理] 连接容器失败 (坑位 %d): %v", indexNum, err)
+		frontConn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "无法连接容器"))
+		return
 	}
 	defer closeDeviceConn(deviceConn)
 

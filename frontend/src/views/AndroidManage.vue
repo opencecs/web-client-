@@ -116,6 +116,13 @@
         <span style="color: #666; margin-left: 8px; font-size: 13px">当前未配置 S5 代理</span>
       </div>
 
+      <!-- 快捷解析 -->
+      <div style="display: flex; gap: 8px; margin-bottom: 14px; align-items: center">
+        <div style="color: #999; font-size: 12px; white-space: nowrap">S5信息</div>
+        <el-input v-model="s5QuickInput" placeholder="格式: 地址:端口:用户名:密码（用户名密码可省略）" size="small" />
+        <el-button size="small" @click="parseS5Quick">解析并填写</el-button>
+      </div>
+
       <!-- 设置表单 -->
       <div style="color: #e0e0e0; font-weight: bold; margin-bottom: 10px">{{ s5Status.status === 1 ? '修改代理' : '设置代理' }}</div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px">
@@ -327,11 +334,25 @@ const s5Status = reactive({ status: 0, statusText: '未启动', addr: '', type: 
 const s5Form = reactive({ addr: '', port: '', usr: '', pwd: '', type: '1' })
 const s5Setting = ref(false)
 const s5Stopping = ref(false)
+const s5QuickInput = ref('')
+
+function parseS5Quick() {
+  const raw = s5QuickInput.value.trim()
+  if (!raw) { ElMessage.warning('请输入 S5 信息'); return }
+  const parts = raw.split(':')
+  if (parts.length < 2) { ElMessage.warning('格式错误，至少需要 地址:端口'); return }
+  s5Form.addr = parts[0]
+  s5Form.port = parts[1]
+  s5Form.usr = parts[2] || ''
+  s5Form.pwd = parts[3] || ''
+  ElMessage.success('已解析并填写')
+}
 
 function openS5Proxy(container) {
   if (!container) { ElMessage.warning('请选择一个运行中的容器'); return }
   s5Container.value = container
   s5Form.addr = ''; s5Form.port = ''; s5Form.usr = ''; s5Form.pwd = ''; s5Form.type = '1'
+  s5QuickInput.value = ''
   Object.assign(s5Status, { status: 0, statusText: '未启动', addr: '', type: 0 })
   s5Visible.value = true
 }
