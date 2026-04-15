@@ -294,14 +294,8 @@ function formatBytes(bytes) {
 }
 
 async function deleteImageByUrl(url) {
-  const shortUrl = url.split('/').pop()
-  const match = images.value.find(img => {
-    const local = img.imageUrl || img.image || img.name || ''
-    return local === url || local === shortUrl || local.endsWith('/' + shortUrl)
-  })
-  const name = match ? (match.imageUrl || match.image || match.name) : url
   try {
-    await device.request('sdk:deleteImage', { image: name })
+    await device.request('sdk:deleteImage', { image: url })
     ElMessage.success('删除成功')
     fetchImages()
   } catch (e) {

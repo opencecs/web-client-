@@ -29,9 +29,18 @@ func (c *WSClient) handleSDKAction(req WSRequest) {
 		}
 		c.sdkQuery(req, "GET", "/android/image", q)
 	case "sdk:deleteImage":
+		img := getStr(req.Data, "image")
+		log.Printf("[SDK] 删除镜像请求: image=%s", img)
 		q := url.Values{}
-		q.Set("image", getStr(req.Data, "image"))
-		c.sdkQuery(req, "DELETE", "/android/image", q)
+		q.Set("image", img)
+		raw, err := c.hub.sdkRequest("DELETE", "/android/image", nil, q)
+		if err != nil {
+			log.Printf("[SDK] 删除镜像失败: %v", err)
+			c.sendResponse(req.ID, false, err.Error(), nil)
+		} else {
+			log.Printf("[SDK] 删除镜像响应: %s", string(raw))
+			c.sendResponse(req.ID, true, "ok", json.RawMessage(raw))
+		}
 	case "sdk:pullImage":
 		go c.handlePullImage(req)
 	case "sdk:pruneImages":
