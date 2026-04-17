@@ -20,6 +20,17 @@ tools/webrtc_repro
 *.swp
 *.swo
 
+# 运行时文件
+.jwt_secret
+*.log
+logs/
+*.exe~
+
+# 数据库
+*.db
+*.db-shm
+*.db-wal
+
 # 系统文件
 .DS_Store
 Thumbs.db
