@@ -65,7 +65,7 @@
       <el-form label-width="140px" style="max-width: 500px">
         <el-form-item label="公网UDP端口">
           <el-input v-model="networkSettings.publicUdpPort" placeholder="留空则与网页端口一致" clearable style="width: 200px" />
-          <div style="color: #999; font-size: 12px; margin-top: 4px">
+          <div style="color: #e6a23c; font-weight: bold; font-size: 14px; margin-top: 4px">
             投屏WebRTC媒体流的公网端口。如果公网映射时UDP端口与TCP端口不同，请在此填写实际的UDP公网端口号。
           </div>
         </el-form-item>

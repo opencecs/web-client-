@@ -32,6 +32,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth.js'
 import { useDeviceStore } from './stores/device.js'
+import { checkIsMobile } from './utils/isMobile.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -84,14 +85,42 @@ watch(() => device.online, (online) => {
   wasOnline.value = online
 })
 
+// 监听设备类型变化：手机↔PC切换时自动刷新
+let lastMobile = true
+let uaPollTimer = null
+
+function checkAndReload() {
+  const nowMobile = checkIsMobile()
+  if (nowMobile !== lastMobile) {
+    window.location.reload()
+  }
+}
+
+function onResize() {
+  checkAndReload()
+}
+
+function onStorage(e) {
+  if (e.key === 'force_platform') {
+    checkAndReload()
+  }
+}
+
 onMounted(() => {
   if (auth.isLoggedIn) {
     device.connect()
   }
+  lastMobile = checkIsMobile()
+  window.addEventListener('resize', onResize)
+  window.addEventListener('storage', onStorage)
+  uaPollTimer = setInterval(checkAndReload, 1000)
 })
 
 onBeforeUnmount(() => {
   if (reconnectedTimer) clearTimeout(reconnectedTimer)
+  window.removeEventListener('resize', onResize)
+  window.removeEventListener('storage', onStorage)
+  if (uaPollTimer) clearInterval(uaPollTimer)
 })
 </script>
 

@@ -38,30 +38,17 @@
 </template>
 
 <script setup>
-import { onMounted, computed } from 'vue'
+import { onMounted, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth.js'
 import { useDeviceStore } from './stores/device.js'
 import Sidebar from './components/Sidebar.vue'
 import { ArrowDown } from '@element-plus/icons-vue'
+import { checkIsMobile } from './utils/isMobile.js'
 
 const router = useRouter()
 const auth = useAuthStore()
 const device = useDeviceStore()
-
-onMounted(() => {
-  if (auth.isLoggedIn) {
-    device.connect()
-  }
-})
-
-function handleCommand(cmd) {
-  if (cmd === 'logout') {
-    device.disconnect()
-    auth.logout()
-    router.push('/login')
-  }
-}
 
 // 检测：手机 UA 但被 force_platform=desktop 强制到桌面版
 const isMobileUA = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile/i.test(navigator.userAgent)
@@ -71,6 +58,55 @@ function switchToMobile() {
   localStorage.removeItem('force_platform')
   window.location.href = '/m'
 }
+
+function handleCommand(cmd) {
+  if (cmd === 'logout') {
+    device.disconnect()
+    auth.logout()
+    router.push('/login')
+  }
+}
+
+// 监听设备类型变化：PC↔手机切换时自动刷新
+let lastMobile = false
+
+function checkAndReload() {
+  const nowMobile = checkIsMobile()
+  if (nowMobile !== lastMobile) {
+    window.location.reload()
+  }
+}
+
+// resize：窗口大小变化（如DevTools切换设备模拟）
+function onResize() {
+  checkAndReload()
+}
+
+// storage：其他标签页修改 force_platform
+function onStorage(e) {
+  if (e.key === 'force_platform') {
+    checkAndReload()
+  }
+}
+
+let uaPollTimer = null
+
+onMounted(() => {
+  if (auth.isLoggedIn) {
+    device.connect()
+  }
+  lastMobile = checkIsMobile()
+  window.addEventListener('resize', onResize)
+  window.addEventListener('storage', onStorage)
+  // 轮询检测UA变化（DevTools切换设备模拟时UA会变但不触发事件）
+  uaPollTimer = setInterval(checkAndReload, 1000)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize)
+  window.removeEventListener('storage', onStorage)
+  if (uaPollTimer) clearInterval(uaPollTimer)
+})
 </script>
 
 <style>
