@@ -9,6 +9,7 @@ const routes = [
   { path: '/', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
   { path: '/device', name: 'DeviceManage', component: () => import('../views/DeviceManage.vue'), meta: { admin: true } },
   { path: '/android', name: 'AndroidManage', component: () => import('../views/AndroidManage.vue') },
+  { path: '/backup', name: 'BackupManage', component: () => import('../views/BackupManage.vue'), meta: { perm: 'backup_manage' } },
 
   { path: '/users', name: 'UserManagement', component: () => import('../views/UserManagement.vue'), meta: { admin: true } },
 
@@ -31,6 +32,7 @@ router.beforeEach(async (to, from, next) => {
       '/login': '/m/login',
       '/android': '/m/android',
       '/device': '/m/device',
+      '/backup': '/m/backup',
       '/users': '/m/users',
     }
     const target = mobileMap[to.path]
@@ -43,6 +45,7 @@ router.beforeEach(async (to, from, next) => {
       '/m/login': '/login',
       '/m/android': '/android',
       '/m/device': '/device',
+      '/m/backup': '/backup',
       '/m/users': '/users',
     }
     const target = desktopMap[to.path]
@@ -71,6 +74,13 @@ router.beforeEach(async (to, from, next) => {
       }
     } catch {
       next(loginPath)
+      return
+    }
+    next()
+  } else if (to.meta.perm) {
+    // 功能权限检查
+    if (!auth.can(to.meta.perm)) {
+      next(homePath)
       return
     }
     next()

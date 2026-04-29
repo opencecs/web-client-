@@ -12,11 +12,13 @@
           label="VPC 分组、域名过滤与容器规则" v-if="auth.can('vpc_manage')" />
       </van-cell-group>
 
-      <van-cell-group inset style="margin-top: 12px" v-if="auth.isAdmin">
+      <van-cell-group inset style="margin-top: 12px" v-if="auth.can('backup_manage') || auth.isAdmin">
+        <van-cell title="备份管理" icon="description" is-link to="/m/backup"
+          label="容器备份查看与删除" v-if="auth.can('backup_manage')" />
         <van-cell title="设备管理" icon="desktop-o" is-link to="/m/device"
-          label="SDK 升级、面板更新、网络设置" />
+          label="SDK 升级、面板更新、网络设置" v-if="auth.isAdmin" />
         <van-cell title="用户管理" icon="friends-o" is-link to="/m/users"
-          label="用户创建、权限配置" />
+          label="用户创建、权限配置" v-if="auth.isAdmin" />
       </van-cell-group>
 
       <van-empty v-if="!hasAnyPermission" description="暂无管理权限" />
@@ -31,7 +33,7 @@ import { useAuthStore } from '../../stores/auth.js'
 const auth = useAuthStore()
 
 const hasAnyPermission = computed(() =>
-  auth.can('image_view') || auth.can('network_bridge') || auth.can('vpc_manage') || auth.isAdmin
+  auth.can('image_view') || auth.can('network_bridge') || auth.can('vpc_manage') || auth.can('backup_manage') || auth.isAdmin
 )
 </script>
 

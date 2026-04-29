@@ -143,7 +143,7 @@ async function fetchBackups() {
   try {
     const resp = await device.request('sdk:listBackups')
     const d = resp.data
-    backups.value = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []
+    backups.value = Array.isArray(d?.data?.list) ? d.data.list : Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []
   } catch {} finally { loadingBackups.value = false }
 }
 
