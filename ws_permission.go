@@ -32,7 +32,7 @@ func (c *WSClient) hasPermission(action string) bool {
 
 	// 创建容器
 	case "sdk:createContainer":
-		return p.ContainerCreate
+		return p.ContainerCreate || p.BackupManage || p.SwitchModel
 
 	// 别名
 	case "alias:list", "alias:set", "alias:delete":
@@ -41,8 +41,12 @@ func (c *WSClient) hasPermission(action string) bool {
 	// 备份
 	case "sdk:listBackups", "sdk:deleteBackup",
 		"sdk:listModelBackups", "sdk:deleteModelBackup",
-		"sdk:batchChangeImage", "sdk:switchModel":
+		"sdk:batchChangeImage":
 		return p.BackupManage
+
+	// 切换机型
+	case "sdk:switchModel":
+		return p.SwitchModel
 
 	// 镜像
 	case "sdk:listImages", "sdk:deleteImage",
@@ -51,7 +55,7 @@ func (c *WSClient) hasPermission(action string) bool {
 
 	// 机型/国家码（创建容器时需要）
 	case "sdk:getPhoneModels", "sdk:getCountryCodes":
-		return p.ContainerCreate
+		return p.ContainerCreate || p.BackupManage || p.SwitchModel
 
 	// 网络
 	case "sdk:listBridges", "sdk:createBridge", "sdk:updateBridge", "sdk:deleteBridge":

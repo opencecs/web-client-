@@ -117,6 +117,7 @@
           <el-checkbox v-model="permForm.container_rename" label="重命名" />
           <el-checkbox v-model="permForm.container_copy" label="复制" />
           <el-checkbox v-model="permForm.container_create" label="创建容器" />
+          <el-checkbox v-model="permForm.switch_model" label="切换机型" />
         </div>
       </div>
 
@@ -337,14 +338,16 @@ const permForm = reactive({
   menu_android: false,
   menu_backup: false,
   menu_file: false,
-  menu_users: false
+  menu_users: false,
+  switch_model: false
 })
 
 const permKeys = [
   'container_start', 'container_restart', 'container_reset', 'container_delete',
   'container_rename', 'container_copy', 'container_create', 'alias_manage',
   'backup_manage', 'image_view', 'projection', 'terminal', 'network_bridge', 'vpc_manage',
-  'menu_dashboard', 'menu_device', 'menu_android', 'menu_backup', 'menu_file', 'menu_users'
+  'menu_dashboard', 'menu_device', 'menu_android', 'menu_backup', 'menu_file', 'menu_users',
+  'switch_model'
 ]
 
 async function editPermissions(user) {

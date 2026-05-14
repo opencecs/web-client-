@@ -123,6 +123,7 @@ func InitDB(path string) *sql.DB {
 		menu_backup BOOLEAN DEFAULT 1,
 		menu_file BOOLEAN DEFAULT 1,
 		menu_users BOOLEAN DEFAULT 1,
+		switch_model BOOLEAN DEFAULT 0,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`)
 		// 菜单权限字段迁移（已存在的表需要 ALTER TABLE 添加列）
@@ -132,6 +133,7 @@ func InitDB(path string) *sql.DB {
 		db.Exec(`ALTER TABLE user_permissions ADD COLUMN menu_backup BOOLEAN DEFAULT 1`)
 		db.Exec(`ALTER TABLE user_permissions ADD COLUMN menu_file BOOLEAN DEFAULT 1`)
 		db.Exec(`ALTER TABLE user_permissions ADD COLUMN menu_users BOOLEAN DEFAULT 1`)
+		db.Exec(`ALTER TABLE user_permissions ADD COLUMN switch_model BOOLEAN DEFAULT 0`)
 
 	// 系统设置表
 	db.Exec(`CREATE TABLE IF NOT EXISTS settings (
@@ -653,6 +655,7 @@ type UserPermissions struct {
 	MenuBackup      bool  `json:"menu_backup"`      // 备份管理
 	MenuFile        bool  `json:"menu_file"`        // 文件管理
 	MenuUsers       bool  `json:"menu_users"`       // 用户管理
+	SwitchModel     bool  `json:"switch_model"`     // 切换机型
 }
 
 // AllowedSlotsMap 返回坑位集合，用于快速查找
@@ -671,12 +674,14 @@ func (s *AuthService) GetUserPermissions(userID int64) *UserPermissions {
 	err := s.db.QueryRow(`SELECT slots, container_start, container_restart, container_reset, container_delete,
 		container_rename, container_copy, container_create, alias_manage, backup_manage,
 		image_view, projection, terminal, network_bridge, vpc_manage,
-		menu_dashboard, menu_device, menu_android, menu_backup, menu_file, menu_users
+		menu_dashboard, menu_device, menu_android, menu_backup, menu_file, menu_users,
+		switch_model
 		FROM user_permissions WHERE user_id = ?`, userID).Scan(
 		&slotsStr, &p.ContainerStart, &p.ContainerRestart, &p.ContainerReset, &p.ContainerDelete,
 		&p.ContainerRename, &p.ContainerCopy, &p.ContainerCreate, &p.AliasManage, &p.BackupManage,
 		&p.ImageView, &p.Projection, &p.Terminal, &p.NetworkBridge, &p.VpcManage,
-		&p.MenuDashboard, &p.MenuDevice, &p.MenuAndroid, &p.MenuBackup, &p.MenuFile, &p.MenuUsers)
+		&p.MenuDashboard, &p.MenuDevice, &p.MenuAndroid, &p.MenuBackup, &p.MenuFile, &p.MenuUsers,
+		&p.SwitchModel)
 	if err != nil {
 		// 没有记录，返回空权限
 		return &UserPermissions{}
@@ -708,8 +713,9 @@ func (s *AuthService) SaveUserPermissions(userID int64, p *UserPermissions) erro
 	_, err := s.db.Exec(`INSERT INTO user_permissions (user_id, slots, container_start, container_restart,
 		container_reset, container_delete, container_rename, container_copy, container_create,
 		alias_manage, backup_manage, image_view, projection, terminal, network_bridge, vpc_manage,
-		menu_dashboard, menu_device, menu_android, menu_backup, menu_file, menu_users)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		menu_dashboard, menu_device, menu_android, menu_backup, menu_file, menu_users,
+			switch_model)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id) DO UPDATE SET
 		slots=excluded.slots, container_start=excluded.container_start, container_restart=excluded.container_restart,
 		container_reset=excluded.container_reset, container_delete=excluded.container_delete,
@@ -720,11 +726,13 @@ func (s *AuthService) SaveUserPermissions(userID int64, p *UserPermissions) erro
 		network_bridge=excluded.network_bridge, vpc_manage=excluded.vpc_manage,
 		menu_dashboard=excluded.menu_dashboard, menu_device=excluded.menu_device,
 		menu_android=excluded.menu_android, menu_backup=excluded.menu_backup,
-		menu_file=excluded.menu_file, menu_users=excluded.menu_users`,
+		menu_file=excluded.menu_file, menu_users=excluded.menu_users,
+			switch_model=excluded.switch_model`,
 		userID, slotsStr, p.ContainerStart, p.ContainerRestart,
 		p.ContainerReset, p.ContainerDelete, p.ContainerRename, p.ContainerCopy, p.ContainerCreate,
 		p.AliasManage, p.BackupManage, p.ImageView, p.Projection, p.Terminal, p.NetworkBridge, p.VpcManage,
-		p.MenuDashboard, p.MenuDevice, p.MenuAndroid, p.MenuBackup, p.MenuFile, p.MenuUsers)
+		p.MenuDashboard, p.MenuDevice, p.MenuAndroid, p.MenuBackup, p.MenuFile, p.MenuUsers,
+			p.SwitchModel)
 	return err
 }
 

@@ -50,7 +50,7 @@
         <van-grid-item icon="revoke" text="重置" @click="confirmAction('reset', '确认重置此容器？')" v-if="auth.can('container_reset')" />
         <van-grid-item icon="delete-o" text="删除" @click="confirmAction('delete', '确认删除此容器？')" v-if="auth.can('container_delete')" />
         <van-grid-item icon="edit" text="重命名" @click="showRename = true" v-if="auth.can('container_rename')" />
-        <van-grid-item icon="phone-o" text="切换机型" @click="showSwitchModel = true" v-if="auth.can('backup_manage')" />
+        <van-grid-item icon="phone-o" text="切换机型" @click="showSwitchModel = true" v-if="auth.can('switch_model')" />
         <van-grid-item icon="upgrade" text="上传文件" @click="triggerUpload" v-if="auth.can('backup_manage')" />
         <van-grid-item icon="description" text="终端" @click="showTerminalHint" v-if="auth.can('terminal')" />
       </van-grid>

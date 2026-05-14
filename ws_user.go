@@ -138,6 +138,7 @@ func parsePermissions(data map[string]interface{}) *UserPermissions {
 	p.MenuBackup = getBool(data, "menu_backup")
 	p.MenuFile = getBool(data, "menu_file")
 	p.MenuUsers = getBool(data, "menu_users")
+	p.SwitchModel = getBool(data, "switch_model")
 
 	return p
 }

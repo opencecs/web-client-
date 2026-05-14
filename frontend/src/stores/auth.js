@@ -31,7 +31,8 @@ export const useAuthStore = defineStore('auth', () => {
     menu_android: false,
     menu_backup: false,
     menu_file: false,
-    menu_users: false
+    menu_users: false,
+    switch_model: false
   })
 
   const isAdmin = computed(() => role.value === 'admin')
