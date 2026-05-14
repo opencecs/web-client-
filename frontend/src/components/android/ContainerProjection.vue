@@ -394,9 +394,7 @@ function onClipboardKey(e) {
 
 // 接收 iframe 内 Ctrl+V 的粘贴请求（SDK 的 send_input_txt 中文乱码，改走 HTTP API）
 function onIframePaste(e) {
-  console.log('[onIframePaste] 收到message:', e.data?.action, e.data?.text?.substring(0, 20))
   if (e.data?.action === 'pasteToAndroid' && e.data.text && props.container) {
-    console.log('[onIframePaste] 发送clipboard:paste, container:', props.container.name)
     device.request('clipboard:paste', { name: props.container.name, text: e.data.text }).catch(() => {})
   }
 }

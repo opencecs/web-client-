@@ -24,7 +24,14 @@ export const useAuthStore = defineStore('auth', () => {
     projection: false,
     terminal: false,
     network_bridge: false,
-    vpc_manage: false
+    vpc_manage: false,
+    // 菜单权限
+    menu_dashboard: false,
+    menu_device: false,
+    menu_android: false,
+    menu_backup: false,
+    menu_file: false,
+    menu_users: false
   })
 
   const isAdmin = computed(() => role.value === 'admin')

@@ -132,6 +132,13 @@ func parsePermissions(data map[string]interface{}) *UserPermissions {
 	p.NetworkBridge = getBool(data, "network_bridge")
 	p.VpcManage = getBool(data, "vpc_manage")
 
+	p.MenuDashboard = getBool(data, "menu_dashboard")
+	p.MenuDevice = getBool(data, "menu_device")
+	p.MenuAndroid = getBool(data, "menu_android")
+	p.MenuBackup = getBool(data, "menu_backup")
+	p.MenuFile = getBool(data, "menu_file")
+	p.MenuUsers = getBool(data, "menu_users")
+
 	return p
 }
 

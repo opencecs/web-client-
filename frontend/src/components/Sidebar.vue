@@ -11,27 +11,27 @@
     </div>
 
     <el-menu :default-active="route.path" router background-color="#141414" text-color="#bbb" active-text-color="#409eff" :collapse="collapsed">
-      <el-menu-item index="/">
+      <el-menu-item v-if="auth.can('menu_dashboard')" index="/">
         <el-icon><Monitor /></el-icon>
         <template #title>设备概览</template>
       </el-menu-item>
-      <el-menu-item v-if="auth.isAdmin" index="/device">
+      <el-menu-item v-if="auth.can('menu_device')" index="/device">
         <el-icon><Cpu /></el-icon>
         <template #title>设备管理</template>
       </el-menu-item>
-      <el-menu-item index="/android">
+      <el-menu-item v-if="auth.can('menu_android')" index="/android">
         <el-icon><Cellphone /></el-icon>
         <template #title>安卓管理</template>
       </el-menu-item>
-      <el-menu-item v-if="auth.can('backup_manage')" index="/backup">
+      <el-menu-item v-if="auth.can('menu_backup')" index="/backup">
         <el-icon><FolderOpened /></el-icon>
         <template #title>备份管理</template>
       </el-menu-item>
-      <el-menu-item v-if="auth.can('backup_manage')" index="/files">
+      <el-menu-item v-if="auth.can('menu_file')" index="/files">
         <el-icon><Document /></el-icon>
         <template #title>文件管理</template>
       </el-menu-item>
-      <el-menu-item v-if="auth.isAdmin" index="/users">
+      <el-menu-item v-if="auth.can('menu_users')" index="/users">
         <el-icon><User /></el-icon>
         <template #title>用户管理</template>
       </el-menu-item>

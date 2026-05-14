@@ -7,12 +7,11 @@ import api from '../api/index.js'
 const routes = [
   { path: '/login', name: 'Login', component: () => import('../views/Login.vue'), meta: { guest: true } },
   { path: '/', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
-  { path: '/device', name: 'DeviceManage', component: () => import('../views/DeviceManage.vue'), meta: { admin: true } },
-  { path: '/android', name: 'AndroidManage', component: () => import('../views/AndroidManage.vue') },
-  { path: '/backup', name: 'BackupManage', component: () => import('../views/BackupManage.vue'), meta: { perm: 'backup_manage' } },
-  { path: '/files', name: 'FileManage', component: () => import('../views/FileManage.vue'), meta: { perm: 'backup_manage' } },
-
-  { path: '/users', name: 'UserManagement', component: () => import('../views/UserManagement.vue'), meta: { admin: true } },
+  { path: '/device', name: 'DeviceManage', component: () => import('../views/DeviceManage.vue'), meta: { perm: 'menu_device' } },
+  { path: '/android', name: 'AndroidManage', component: () => import('../views/AndroidManage.vue'), meta: { perm: 'menu_android' } },
+  { path: '/backup', name: 'BackupManage', component: () => import('../views/BackupManage.vue'), meta: { perm: 'menu_backup' } },
+  { path: '/files', name: 'FileManage', component: () => import('../views/FileManage.vue'), meta: { perm: 'menu_file' } },
+  { path: '/users', name: 'UserManagement', component: () => import('../views/UserManagement.vue'), meta: { perm: 'menu_users' } },
 
   // 移动端路由
   ...mobileRoutes,
@@ -67,23 +66,20 @@ router.beforeEach(async (to, from, next) => {
     }
   } else if (!auth.token) {
     next(loginPath)
-  } else if (to.meta.admin) {
-    // 每次进入管理员页面都从后端验证角色
-    try {
-      const { data } = await api.get('/auth/me')
-      if (data.role !== 'admin') {
-        next(homePath)
-        return
-      }
-    } catch {
-      next(loginPath)
-      return
-    }
-    next()
   } else if (to.meta.perm) {
-    // 功能权限检查
+    // 权限检查（admin 自动通过）
     if (!auth.can(to.meta.perm)) {
-      next(homePath)
+      // 跳到第一个有权限的菜单，避免死循环
+      const menuMap = [
+        { perm: 'menu_dashboard', path: '/' },
+        { perm: 'menu_device', path: '/device' },
+        { perm: 'menu_android', path: '/android' },
+        { perm: 'menu_backup', path: '/backup' },
+        { perm: 'menu_file', path: '/files' },
+        { perm: 'menu_users', path: '/users' },
+      ]
+      const first = menuMap.find(m => auth.can(m.perm))
+      next(first ? first.path : '/')
       return
     }
     next()

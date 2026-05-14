@@ -53,7 +53,7 @@
           <div style="color: #b0b0b0; font-size: 11px; margin-top: 2px">仅支持英文、数字和短横线，如：my-bridge</div>
         </el-form-item>
         <el-form-item label="IP 地址段">
-          <el-input v-model="bridgeForm.cidr" placeholder="如 172.18.0.0/16" />
+          <el-input v-model="bridgeForm.cidr" placeholder="如 192.168.0.0（自动补/24）" />
           <div style="color: #b0b0b0; font-size: 11px; margin-top: 2px">
             CIDR 格式，不同网卡需使用不同网段，避免 IP 冲突。<br/>
             常用网段：172.18.0.0/16、172.19.0.0/16、10.10.0.0/16
@@ -109,15 +109,24 @@ async function fetchBridges() {
   try {
     const resp = await device.request('sdk:listBridges')
     const d = resp.data
-    bridges.value = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []
+    const list = d?.data?.list || d?.list || d?.data || d
+    bridges.value = Array.isArray(list) ? list : []
   } catch {} finally { loadingBridges.value = false }
 }
 
 async function createBridge() {
   if (!bridgeForm.name || !bridgeForm.cidr) { ElMessage.warning('请填写完整'); return }
+  // 自动补全子网掩码：用户只输入 IP 时默认加 /24
+  let cidr = bridgeForm.cidr.trim()
+  if (!cidr.includes('/')) cidr += '/24'
   creatingBridge.value = true
   try {
-    await device.request('sdk:createBridge', { customName: bridgeForm.name, cidr: bridgeForm.cidr })
+    const resp = await device.request('sdk:createBridge', { customName: bridgeForm.name, cidr })
+    const d = resp.data
+    if (d?.code !== undefined && d.code !== 0) {
+      ElMessage.error(d?.message || '创建失败')
+      return
+    }
     ElMessage.success('创建成功')
     showBridgeCreate.value = false
     bridgeForm.name = ''; bridgeForm.cidr = ''
@@ -135,7 +144,12 @@ function startEditBridge(row) {
 async function updateBridge() {
   updatingBridge.value = true
   try {
-    await device.request('sdk:updateBridge', { name: editBridgeName.value, newCidr: editBridgeCidr.value })
+    const resp = await device.request('sdk:updateBridge', { name: editBridgeName.value, newCidr: editBridgeCidr.value })
+    const d = resp.data
+    if (d?.code !== undefined && d.code !== 0) {
+      ElMessage.error(d?.message || '更新失败')
+      return
+    }
     ElMessage.success('更新成功')
     showBridgeEdit.value = false
     fetchBridges()
@@ -145,7 +159,12 @@ async function updateBridge() {
 
 async function deleteBridge(row) {
   try {
-    await device.request('sdk:deleteBridge', { name: row.name })
+    const resp = await device.request('sdk:deleteBridge', { name: row.name })
+    const d = resp.data
+    if (d?.code !== undefined && d.code !== 0) {
+      ElMessage.error(d?.message || '删除失败')
+      return
+    }
     ElMessage.success('删除成功')
     fetchBridges()
   } catch (e) { ElMessage.error('删除失败') }

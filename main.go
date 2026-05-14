@@ -132,9 +132,9 @@ func main() {
 			r.Use(authService.AdminOnly)
 			// SSH WebSocket 代理
 			r.Get("/ws/ssh", deviceService.HandleSSHProxy)
-			// SDK WebSocket 代理（容器终端 exec 等）
-			r.HandleFunc("/api/sdk/*", sdkProxy.HandleProxy)
 		})
+		// SDK WebSocket 代理（容器终端 exec 等）- 所有登录用户可用
+		r.HandleFunc("/api/sdk/*", sdkProxy.HandleProxy)
 	})
 
 	// webplayer 静态文件（ETag + 长缓存，避免重复传输）

@@ -385,6 +385,19 @@ html.dark {
   --el-alert-bg-color: var(--bg-elevated) !important;
   border-color: var(--border-light) !important;
 }
+.el-alert--error {
+  --el-alert-bg-color: #2a1515 !important;
+  border-color: #5c2a2a !important;
+}
+.el-alert--error .el-alert__title {
+  color: #f56c6c !important;
+}
+.el-alert--error .el-alert__description {
+  color: #f0a0a0 !important;
+  font-size: 12px;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
 
 /* Progress */
 .el-progress__text {

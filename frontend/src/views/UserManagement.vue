@@ -77,49 +77,99 @@
     </el-dialog>
 
     <!-- 权限配置对话框 -->
-    <el-dialog v-model="permVisible" :title="`权限配置 — ${permUser?.username}`" width="600px">
-      <div style="margin-bottom: 16px">
-        <div style="display: flex; align-items: center; margin-bottom: 8px">
-          <span style="color: #f0f0f0; font-weight: bold; margin-right: 12px">坑位权限</span>
-          <el-button size="small" text @click="selectAllSlots">全选</el-button>
-          <el-button size="small" text @click="selectNoSlots">取消全选</el-button>
+    <el-dialog v-model="permVisible" :title="`权限配置 — ${permUser?.username}`" width="640px">
+      <!-- 坑位权限 -->
+      <div class="perm-section">
+        <div class="perm-section-header">
+          <span class="perm-section-title">坑位权限</span>
+          <span class="perm-section-desc">允许操作的云机坑位</span>
+          <div class="perm-section-actions">
+            <el-button size="small" text @click="selectAllSlots">全选</el-button>
+            <el-button size="small" text @click="selectNoSlots">清空</el-button>
+          </div>
         </div>
-        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <div class="slot-grid">
           <el-checkbox
             v-for="i in maxSlots"
             :key="i"
             :model-value="permForm.slots.includes(i)"
             @change="toggleSlot(i)"
-            :label="'坑位' + i"
+            :label="'坑位 ' + i"
             border
             size="small"
           />
         </div>
       </div>
 
-      <el-divider />
+      <el-divider style="margin: 12px 0" />
 
-      <div>
-        <span style="color: #f0f0f0; font-weight: bold; display: block; margin-bottom: 8px">功能权限</span>
-        <div style="display: flex; align-items: center; margin-bottom: 8px">
-          <el-button size="small" text @click="selectAllPerms">全选</el-button>
-          <el-button size="small" text @click="selectNoPerms">取消全选</el-button>
+      <!-- 容器管理 -->
+      <div class="perm-section">
+        <div class="perm-section-header">
+          <span class="perm-section-title">容器管理</span>
+          <span class="perm-section-desc">云机的启停、重置、删除等操作</span>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px">
-          <el-checkbox v-model="permForm.container_start" label="启动/停止" />
+        <div class="perm-grid">
+          <el-checkbox v-model="permForm.container_start" label="启动 / 停止" />
           <el-checkbox v-model="permForm.container_restart" label="重启" />
           <el-checkbox v-model="permForm.container_reset" label="重置" />
           <el-checkbox v-model="permForm.container_delete" label="删除" />
           <el-checkbox v-model="permForm.container_rename" label="重命名" />
           <el-checkbox v-model="permForm.container_copy" label="复制" />
           <el-checkbox v-model="permForm.container_create" label="创建容器" />
-          <el-checkbox v-model="permForm.alias_manage" label="别名管理" />
-          <el-checkbox v-model="permForm.backup_manage" label="备份管理" />
-          <el-checkbox v-model="permForm.image_view" label="镜像管理" />
+        </div>
+      </div>
+
+      <!-- 远程控制 -->
+      <div class="perm-section">
+        <div class="perm-section-header">
+          <span class="perm-section-title">远程控制</span>
+          <span class="perm-section-desc">投屏、终端等远程访问功能</span>
+        </div>
+        <div class="perm-grid">
           <el-checkbox v-model="permForm.projection" label="投屏" />
           <el-checkbox v-model="permForm.terminal" label="终端" />
+        </div>
+      </div>
+
+      <!-- 数据管理 -->
+      <div class="perm-section">
+        <div class="perm-section-header">
+          <span class="perm-section-title">数据管理</span>
+          <span class="perm-section-desc">备份、镜像、别名等数据操作</span>
+        </div>
+        <div class="perm-grid">
+          <el-checkbox v-model="permForm.backup_manage" label="备份管理" />
+          <el-checkbox v-model="permForm.image_view" label="镜像管理" />
+          <el-checkbox v-model="permForm.alias_manage" label="别名管理" />
+        </div>
+      </div>
+
+      <!-- 网络 -->
+      <div class="perm-section">
+        <div class="perm-section-header">
+          <span class="perm-section-title">网络管理</span>
+          <span class="perm-section-desc">虚拟网卡、VPC 等网络配置</span>
+        </div>
+        <div class="perm-grid">
           <el-checkbox v-model="permForm.network_bridge" label="虚拟网卡" />
           <el-checkbox v-model="permForm.vpc_manage" label="VPC 管理" />
+        </div>
+      </div>
+
+      <!-- 菜单权限 -->
+      <div class="perm-section">
+        <div class="perm-section-header">
+          <span class="perm-section-title">菜单权限</span>
+          <span class="perm-section-desc">控制用户可见的导航菜单</span>
+        </div>
+        <div class="perm-grid">
+          <el-checkbox v-model="permForm.menu_dashboard" label="设备概览" />
+          <el-checkbox v-model="permForm.menu_device" label="设备管理" />
+          <el-checkbox v-model="permForm.menu_android" label="安卓管理" />
+          <el-checkbox v-model="permForm.menu_backup" label="备份管理" />
+          <el-checkbox v-model="permForm.menu_file" label="文件管理" />
+          <el-checkbox v-model="permForm.menu_users" label="用户管理" />
         </div>
       </div>
 
@@ -280,13 +330,21 @@ const permForm = reactive({
   projection: false,
   terminal: false,
   network_bridge: false,
-  vpc_manage: false
+  vpc_manage: false,
+  // 菜单权限
+  menu_dashboard: false,
+  menu_device: false,
+  menu_android: false,
+  menu_backup: false,
+  menu_file: false,
+  menu_users: false
 })
 
 const permKeys = [
   'container_start', 'container_restart', 'container_reset', 'container_delete',
   'container_rename', 'container_copy', 'container_create', 'alias_manage',
-  'backup_manage', 'image_view', 'projection', 'terminal', 'network_bridge', 'vpc_manage'
+  'backup_manage', 'image_view', 'projection', 'terminal', 'network_bridge', 'vpc_manage',
+  'menu_dashboard', 'menu_device', 'menu_android', 'menu_backup', 'menu_file', 'menu_users'
 ]
 
 async function editPermissions(user) {
@@ -357,3 +415,37 @@ async function savePermissions() {
 
 onMounted(loadUsers)
 </script>
+
+<style scoped>
+.perm-section {
+  margin-bottom: 16px;
+}
+.perm-section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.perm-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.perm-section-desc {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.perm-section-actions {
+  margin-left: auto;
+}
+.slot-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.perm-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+</style>

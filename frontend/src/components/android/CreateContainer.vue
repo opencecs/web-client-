@@ -237,7 +237,7 @@
         <el-progress :percentage="100" :status="taskPhase === 'failed' ? 'exception' : 'success'" :stroke-width="12" />
       </template>
       <div v-if="taskError" style="margin-top: 8px">
-        <el-alert type="error" :closable="false" :title="taskError" />
+        <el-alert type="error" :closable="false" :title="taskError" :description="taskErrorDetail" show-icon />
       </div>
     </div>
 
@@ -330,6 +330,7 @@ const createTip = ref('')
 const taskPhase = ref(null)
 const taskDone = ref(false)
 const taskError = ref('')
+const taskErrorDetail = ref('')
 const elapsedSeconds = ref(0)
 let elapsedTimer = null
 let abortController = null
@@ -489,6 +490,7 @@ watch(() => props.modelValue, (val) => {
     taskPhase.value = null
     taskDone.value = false
     taskError.value = ''
+    taskErrorDetail.value = ''
     pullCurrent.value = 0; pullTotal.value = 0; pullStatusText.value = ''
     stopTask()
     loadData()
@@ -529,7 +531,8 @@ async function loadData() {
   // 虚拟网卡
   if (bridgeResp.status === 'fulfilled') {
     const d = bridgeResp.value.data
-    bridgeOptions.value = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []
+    const bl = d?.data?.list || d?.list || d?.data || d
+    bridgeOptions.value = Array.isArray(bl) ? bl : []
   }
   loadingBridges.value = false
 }
@@ -556,6 +559,7 @@ async function doCreate() {
     const alias = form.alias?.trim()
     let success = 0, fail = 0
     const failedSlots = []
+    let lastFailMsg = ''
     createCurrent.value = 0
     createTotal.value = slots.length
     for (let i = 0; i < slots.length; i++) {
@@ -570,13 +574,20 @@ async function doCreate() {
         if (hasRunning) body.start = false
         const res = await device.request('sdk:createContainer', body, 120000)
         const resData = res.data || {}
-        if (resData.code && resData.code !== 0) { fail++; failedSlots.push(slotNum); continue }
+        if (resData.code && resData.code !== 0) {
+          fail++; failedSlots.push(slotNum)
+          lastFailMsg = resData.message || resData.msg || resData.error || `错误码 ${resData.code}`
+          continue
+        }
         if (alias) {
           const displayAlias = slots.length > 1 ? `${alias}-${slotNum}` : alias
           try { await device.setAlias(body.name, displayAlias) } catch {}
         }
         success++
-      } catch { fail++; failedSlots.push(slotNum) }
+      } catch (e) {
+        fail++; failedSlots.push(slotNum)
+        lastFailMsg = e?.message || e?.toString() || '未知错误'
+      }
       // 非最后一个坑位，等待设备就绪
       if (i < slots.length - 1) {
         createSlotNum.value = -1
@@ -588,10 +599,10 @@ async function doCreate() {
       if (slots.length > 1) ElMessage.success(`${success} 个容器全部创建完成`)
     } else {
       const failInfo = failedSlots.length > 0 ? ` (坑位 ${failedSlots.join(', ')})` : ''
-      setFailed(`完成: ${success} 成功, ${fail} 失败${failInfo}`)
+      setFailed(`完成: ${success} 成功, ${fail} 失败${failInfo}`, lastFailMsg)
     }
   } catch (e) {
-    ElMessage.error(e.message || '创建失败')
+    setFailed('创建失败', e?.message || '未知错误')
   } finally {
     creating.value = false
     device.refreshContainers()
@@ -627,7 +638,11 @@ function buildBody() {
   if (!body.countryCode) delete body.countryCode
   if (!body.longitude) delete body.longitude
   if (!body.latitude) delete body.latitude
-  if (!body.bridge) delete body.bridge
+  // 网卡参数名映射：前端 form.bridge → SDK mytBridgeName
+  if (body.bridge) {
+    body.mytBridgeName = body.bridge
+  }
+  delete body.bridge
   return body
 }
 
@@ -640,7 +655,7 @@ async function doPullImage(imageUrl) {
     },
     onExtracting(text) { taskPhase.value = 'extracting'; pullStatusText.value = text },
     onComplete(text) { pullStatusText.value = text },
-    onError(msg) { setFailed(msg) },
+    onError(msg) { setFailed(msg, '') },
   }, abortController.signal)
 }
 
@@ -651,8 +666,8 @@ function setDone() {
   // 自动关闭对话框
   setTimeout(() => emit('update:modelValue', false), 800)
 }
-function setFailed(msg) {
-  taskPhase.value = 'failed'; taskDone.value = true; taskError.value = msg; stopTimer()
+function setFailed(msg, detail) {
+  taskPhase.value = 'failed'; taskDone.value = true; taskError.value = msg; taskErrorDetail.value = detail || ''; stopTimer()
   ElMessage.error(msg)
   emit('created')
 }

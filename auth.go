@@ -117,8 +117,21 @@ func InitDB(path string) *sql.DB {
 		terminal BOOLEAN DEFAULT 0,
 		network_bridge BOOLEAN DEFAULT 0,
 		vpc_manage BOOLEAN DEFAULT 0,
+		menu_dashboard BOOLEAN DEFAULT 1,
+		menu_device BOOLEAN DEFAULT 1,
+		menu_android BOOLEAN DEFAULT 1,
+		menu_backup BOOLEAN DEFAULT 1,
+		menu_file BOOLEAN DEFAULT 1,
+		menu_users BOOLEAN DEFAULT 1,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`)
+		// 菜单权限字段迁移（已存在的表需要 ALTER TABLE 添加列）
+		db.Exec(`ALTER TABLE user_permissions ADD COLUMN menu_dashboard BOOLEAN DEFAULT 1`)
+		db.Exec(`ALTER TABLE user_permissions ADD COLUMN menu_device BOOLEAN DEFAULT 1`)
+		db.Exec(`ALTER TABLE user_permissions ADD COLUMN menu_android BOOLEAN DEFAULT 1`)
+		db.Exec(`ALTER TABLE user_permissions ADD COLUMN menu_backup BOOLEAN DEFAULT 1`)
+		db.Exec(`ALTER TABLE user_permissions ADD COLUMN menu_file BOOLEAN DEFAULT 1`)
+		db.Exec(`ALTER TABLE user_permissions ADD COLUMN menu_users BOOLEAN DEFAULT 1`)
 
 	// 系统设置表
 	db.Exec(`CREATE TABLE IF NOT EXISTS settings (
@@ -633,6 +646,13 @@ type UserPermissions struct {
 	Terminal        bool  `json:"terminal"`         // 终端
 	NetworkBridge   bool  `json:"network_bridge"`   // 虚拟内置网卡
 	VpcManage       bool  `json:"vpc_manage"`       // VPC
+	// 菜单权限
+	MenuDashboard   bool  `json:"menu_dashboard"`   // 设备概览
+	MenuDevice      bool  `json:"menu_device"`      // 设备管理
+	MenuAndroid     bool  `json:"menu_android"`     // 安卓管理
+	MenuBackup      bool  `json:"menu_backup"`      // 备份管理
+	MenuFile        bool  `json:"menu_file"`        // 文件管理
+	MenuUsers       bool  `json:"menu_users"`       // 用户管理
 }
 
 // AllowedSlotsMap 返回坑位集合，用于快速查找
@@ -650,11 +670,13 @@ func (s *AuthService) GetUserPermissions(userID int64) *UserPermissions {
 	var p UserPermissions
 	err := s.db.QueryRow(`SELECT slots, container_start, container_restart, container_reset, container_delete,
 		container_rename, container_copy, container_create, alias_manage, backup_manage,
-		image_view, projection, terminal, network_bridge, vpc_manage
+		image_view, projection, terminal, network_bridge, vpc_manage,
+		menu_dashboard, menu_device, menu_android, menu_backup, menu_file, menu_users
 		FROM user_permissions WHERE user_id = ?`, userID).Scan(
 		&slotsStr, &p.ContainerStart, &p.ContainerRestart, &p.ContainerReset, &p.ContainerDelete,
 		&p.ContainerRename, &p.ContainerCopy, &p.ContainerCreate, &p.AliasManage, &p.BackupManage,
-		&p.ImageView, &p.Projection, &p.Terminal, &p.NetworkBridge, &p.VpcManage)
+		&p.ImageView, &p.Projection, &p.Terminal, &p.NetworkBridge, &p.VpcManage,
+		&p.MenuDashboard, &p.MenuDevice, &p.MenuAndroid, &p.MenuBackup, &p.MenuFile, &p.MenuUsers)
 	if err != nil {
 		// 没有记录，返回空权限
 		return &UserPermissions{}
@@ -685,8 +707,9 @@ func (s *AuthService) SaveUserPermissions(userID int64, p *UserPermissions) erro
 
 	_, err := s.db.Exec(`INSERT INTO user_permissions (user_id, slots, container_start, container_restart,
 		container_reset, container_delete, container_rename, container_copy, container_create,
-		alias_manage, backup_manage, image_view, projection, terminal, network_bridge, vpc_manage)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		alias_manage, backup_manage, image_view, projection, terminal, network_bridge, vpc_manage,
+		menu_dashboard, menu_device, menu_android, menu_backup, menu_file, menu_users)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id) DO UPDATE SET
 		slots=excluded.slots, container_start=excluded.container_start, container_restart=excluded.container_restart,
 		container_reset=excluded.container_reset, container_delete=excluded.container_delete,
@@ -694,10 +717,14 @@ func (s *AuthService) SaveUserPermissions(userID int64, p *UserPermissions) erro
 		container_create=excluded.container_create, alias_manage=excluded.alias_manage,
 		backup_manage=excluded.backup_manage, image_view=excluded.image_view,
 		projection=excluded.projection, terminal=excluded.terminal,
-		network_bridge=excluded.network_bridge, vpc_manage=excluded.vpc_manage`,
+		network_bridge=excluded.network_bridge, vpc_manage=excluded.vpc_manage,
+		menu_dashboard=excluded.menu_dashboard, menu_device=excluded.menu_device,
+		menu_android=excluded.menu_android, menu_backup=excluded.menu_backup,
+		menu_file=excluded.menu_file, menu_users=excluded.menu_users`,
 		userID, slotsStr, p.ContainerStart, p.ContainerRestart,
 		p.ContainerReset, p.ContainerDelete, p.ContainerRename, p.ContainerCopy, p.ContainerCreate,
-		p.AliasManage, p.BackupManage, p.ImageView, p.Projection, p.Terminal, p.NetworkBridge, p.VpcManage)
+		p.AliasManage, p.BackupManage, p.ImageView, p.Projection, p.Terminal, p.NetworkBridge, p.VpcManage,
+		p.MenuDashboard, p.MenuDevice, p.MenuAndroid, p.MenuBackup, p.MenuFile, p.MenuUsers)
 	return err
 }
 
